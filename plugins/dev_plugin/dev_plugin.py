@@ -142,6 +142,15 @@ class DevPlugin(NcatBotPlugin):
                 await event.reply(_status_text(req))
             return
 
+        if re.match(r"^#dev\s*(close|关闭|取消需求)$", text, re.IGNORECASE):
+            async with self._lock:
+                req = self._requests.get(user_qq)
+            if not req or req.is_expired():
+                await event.reply("你当前没有进行中的开发需求。")
+            else:
+                await self._close_by_user(req, user_qq, event)
+            return
+
         if re.match(r"^#dev\s+(?!cancel|list|help|帮助|\?)\S", text, re.IGNORECASE):
             init = text[len("#dev"):].strip()
             await self._start_request(event, user_qq, group_id, is_priv, init)
@@ -339,6 +348,34 @@ class DevPlugin(NcatBotPlugin):
             user_id=int(ADMIN_QQ), text="✅ 已拒绝 QQ {} 的需求".format(user_qq))
         await self._send_to_user(req, user_qq,
             "❌ 需求未通过审批。\n原因：{}".format(reason))
+
+    async def _close_by_user(self, req: DevRequest, user_qq: str, event):
+        """用户主动关闭自己的需求。"""
+        state = req.state
+
+        # 开发中 / 等待上线：需要回滚代码
+        needs_rollback = state in (S_DEVELOPING, S_PENDING_DEPLOY)
+
+        # 开发中还在跑：标记状态让 _run_dev 收到结果时发现需求已消失
+        async with self._lock:
+            self._requests.pop(user_qq, None)
+        req.unmark_chatting()
+
+        if needs_rollback and req.git_snapshot:
+            await event.reply("正在回滚代码，稍等...")
+            await asyncio.get_event_loop().run_in_executor(
+                None, _git_rollback, req.git_snapshot)
+            await event.reply("✅ 需求已关闭，代码已回滚。")
+            await self.api.post_private_msg(
+                user_id=int(ADMIN_QQ),
+                text="ℹ️ QQ {} 主动关闭了需求（状态：{}），代码已回滚。".format(user_qq, state))
+        else:
+            await event.reply("✅ 需求已关闭。")
+            # 如果已在审批阶段，通知管理员
+            if state == S_PENDING_APPROVAL:
+                await self.api.post_private_msg(
+                    user_id=int(ADMIN_QQ),
+                    text="ℹ️ QQ {} 主动撤回了待审批的需求。".format(user_qq))
 
     async def _run_dev(self, req: DevRequest, user_qq: str):
         snap = await asyncio.get_event_loop().run_in_executor(None, _git_snapshot)
@@ -559,6 +596,7 @@ def _help_text() -> str:
         "常用指令：\n"
         "#dev <想法>    发起需求\n"
         "#dev status   查看我的需求进度\n"
+        "#dev close    关闭我的需求\n"
         "#dev help     查看本帮助\n"
         "━━━━━━━━━━━━━━\n"
         "注意事项：\n"
