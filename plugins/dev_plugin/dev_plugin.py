@@ -43,6 +43,28 @@ S_PENDING_DEPLOY   = "PENDING_DEPLOY"
 # 正在沟通需求的用户QQ集合，chat_plugin 读取此集合来让位
 ACTIVE_DEV_USERS: set = set()
 
+# 插件归属文件路径
+OWNERSHIP_FILE = PROJECT_ROOT / "data" / "plugin_ownership.json"
+
+
+def _load_ownership() -> dict:
+    """读取插件归属表 {plugin_name: owner_qq}。"""
+    try:
+        if OWNERSHIP_FILE.exists():
+            import json
+            return json.loads(OWNERSHIP_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_ownership(data: dict):
+    """写入插件归属表。"""
+    import json
+    OWNERSHIP_FILE.parent.mkdir(parents=True, exist_ok=True)
+    OWNERSHIP_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
 ANALYST_SYSTEM = (
     "你是一个 QQ 机器人需求分析师，帮助用户把模糊的功能想法变成清晰的开发需求。\n\n"
     "你的工作方式：\n"
@@ -90,6 +112,7 @@ class DevRequest:
         self.dev_result   = ""
         self.dev_log      = ""   # 开发过程摘要（实时更新）
         self.git_snapshot = ""
+        self.target_plugin = ""  # AI 识别出的目标插件名（空=新插件）
         self.created_at   = time.time()
         self.updated_at   = time.time()
         self.dev_start_at: float = 0.0  # 开发开始时间
@@ -280,7 +303,15 @@ class DevPlugin(NcatBotPlugin):
             if "[READY]" in reply:
                 summary = reply[reply.index("[READY]") + 7:].strip()
                 req.summary = summary
-                req.state   = S_CONFIRMING
+                # 归属检查：识别目标插件，检查是否有权修改
+                blocked, block_msg = await self._check_ownership(req, user_qq)
+                if blocked:
+                    async with self._lock:
+                        self._requests.pop(user_qq, None)
+                    req.unmark_chatting()
+                    await self._send_to_user(req, user_qq, block_msg)
+                    return
+                req.state = S_CONFIRMING
                 msg = "✅ 需求已整理：\n\n{}\n\n回复「确认」提交审批，或告诉我需要修改的地方。".format(summary)
                 await self._send_to_user(req, user_qq, msg)
             else:
@@ -314,7 +345,15 @@ class DevPlugin(NcatBotPlugin):
                 if "[READY]" in reply:
                     summary = reply[reply.index("[READY]") + 7:].strip()
                     req.summary = summary
-                    req.state   = S_CONFIRMING
+                    # 归属检查
+                    blocked, block_msg = await self._check_ownership(req, user_qq)
+                    if blocked:
+                        async with self._lock:
+                            self._requests.pop(user_qq, None)
+                        req.unmark_chatting()
+                        await self._send_to_user(req, user_qq, block_msg)
+                        return
+                    req.state = S_CONFIRMING
                     msg = "✅ 已更新需求：\n\n{}\n\n回复「确认」提交，或继续修改。".format(summary)
                     await self._send_to_user(req, user_qq, msg)
                 else:
@@ -466,6 +505,12 @@ class DevPlugin(NcatBotPlugin):
         await asyncio.get_event_loop().run_in_executor(
             None, _git_commit_push, req.summary[:50])
         await asyncio.get_event_loop().run_in_executor(None, _restart_qiubot)
+
+        # 写入插件归属：新建插件才写，修改已有插件不覆盖原归属
+        if not req.target_plugin and req.summary:
+            # 新插件：让 AI 从摘要里推断插件目录名
+            asyncio.create_task(self._register_new_plugin(req, user_qq))
+
         async with self._lock:
             self._requests.pop(user_qq, None)
         await self.api.post_private_msg(
@@ -486,11 +531,109 @@ class DevPlugin(NcatBotPlugin):
             user_id=int(ADMIN_QQ), text="✅ 已取消，代码已回滚。")
         await self._send_to_user(req, user_qq, "需求已取消，代码已回滚。")
 
+    async def _register_new_plugin(self, req: DevRequest, user_qq: str):
+        """上线后扫描新增的插件目录，写入归属记录。"""
+        try:
+            # 让 AI 从摘要推断插件目录名
+            prompt = (
+                "根据以下需求摘要，推断 AI 开发的插件目录名（小写+下划线，以 _plugin 结尾）。\n"
+                "只回复目录名，不加任何解释。\n\n需求摘要：\n{}"
+            ).format(req.summary)
+            result = await _call_claude(
+                [{"role": "user", "content": prompt}],
+                "你是一个代码分析助手，只回复简短的答案。"
+            )
+            plugin_name = result.strip().strip("\"' \n").lower()
+
+            # 验证目录是否真的存在
+            plugin_path = PROJECT_ROOT / "plugins" / plugin_name
+            if not plugin_path.exists():
+                # 扫描新增目录（比对前后）
+                return
+
+            # 写入归属
+            ownership = _load_ownership()
+            if plugin_name not in ownership:  # 不覆盖已有归属
+                ownership[plugin_name] = user_qq
+                _save_ownership(ownership)
+                print("[DevPlugin] 插件归属已记录: {} -> {}".format(plugin_name, user_qq))
+        except Exception as e:
+            print("[DevPlugin] 注册插件归属失败: {}".format(e))
+
     async def _analyst(self, req: DevRequest) -> str:
         try:
             return await _call_claude(req.history, ANALYST_SYSTEM)
         except Exception as e:
             return "[AI 调用失败: {}]".format(e)
+
+    async def _check_ownership(self, req: DevRequest, user_qq: str) -> tuple:
+        """
+        识别需求摘要涉及的目标插件，检查用户是否有权修改。
+        返回 (blocked: bool, message: str)
+        """
+        # 管理员无限制
+        if user_qq == ADMIN_QQ:
+            return False, ""
+
+        # 获取当前所有插件目录名
+        plugins_dir = PROJECT_ROOT / "plugins"
+        existing_plugins = [
+            p.name for p in plugins_dir.iterdir()
+            if p.is_dir() and not p.name.startswith("_")
+        ] if plugins_dir.exists() else []
+
+        if not existing_plugins:
+            return False, ""
+
+        # 让 AI 从需求摘要里识别目标插件
+        identify_prompt = (
+            "根据以下需求摘要，判断这个需求是要修改已有插件还是新建插件。\n\n"
+            "需求摘要：\n{}\n\n"
+            "现有插件列表：{}\n\n"
+            "如果是修改已有插件，回复插件目录名（只回复名称，不加任何解释）。\n"
+            "如果是新建插件，回复：NEW\n"
+            "如果不确定，回复：NEW"
+        ).format(req.summary, ", ".join(existing_plugins))
+
+        try:
+            result = await _call_claude(
+                [{"role": "user", "content": identify_prompt}],
+                "你是一个代码分析助手，只回复简短的答案。"
+            )
+            target = result.strip().lower()
+        except Exception:
+            return False, ""
+
+        # 清理可能带的引号或空格
+        target = target.strip("\"' \n")
+
+        # 新插件，无需检查
+        if target == "new" or target not in [p.lower() for p in existing_plugins]:
+            return False, ""
+
+        # 找到实际插件名（保持大小写）
+        actual_name = next(
+            (p for p in existing_plugins if p.lower() == target), target)
+        req.target_plugin = actual_name
+
+        # 检查归属
+        ownership = _load_ownership()
+        owner_qq = ownership.get(actual_name)
+
+        if owner_qq is None:
+            # 没有归属记录（可能是初始插件），只有管理员能改
+            return True, (
+                "❌ 插件「{}」没有群友开发记录，只有管理员可以修改。".format(actual_name)
+            )
+
+        if owner_qq != user_qq:
+            return True, (
+                "❌ 插件「{}」由 QQ {} 开发，只有原作者或管理员可以修改它。\n"
+                "如果你想新增相关功能，可以重新描述你的需求。"
+            ).format(actual_name, owner_qq)
+
+        # 是原作者，允许修改
+        return False, ""
 
 
 async def _call_claude(messages: list, system: str) -> str:
