@@ -55,6 +55,16 @@ ANALYST_SYSTEM = (
 )
 
 
+STATE_LABELS = {
+    S_CHOOSING_MODE:    "选择沟通方式",
+    S_CHATTING:         "需求沟通中",
+    S_CONFIRMING:       "等待用户确认需求",
+    S_PENDING_APPROVAL: "等待管理员审批",
+    S_DEVELOPING:       "AI 开发中",
+    S_PENDING_DEPLOY:   "等待管理员确认上线",
+}
+
+
 class DevRequest:
     def __init__(self, user_qq: str, group_id: Optional[str], init_text: str):
         self.user_qq      = user_qq
@@ -65,9 +75,11 @@ class DevRequest:
         self.history: list = []
         self.summary      = ""
         self.dev_result   = ""
+        self.dev_log      = ""   # 开发过程摘要（实时更新）
         self.git_snapshot = ""
         self.created_at   = time.time()
         self.updated_at   = time.time()
+        self.dev_start_at: float = 0.0  # 开发开始时间
 
     def touch(self):
         self.updated_at = time.time()
@@ -108,6 +120,15 @@ class DevPlugin(NcatBotPlugin):
 
         if re.match(r"^#dev\s*(help|帮助|\?)$", text, re.IGNORECASE):
             await event.reply(_help_text())
+            return
+
+        if re.match(r"^#dev\s*(status|进度|状态)$", text, re.IGNORECASE):
+            async with self._lock:
+                req = self._requests.get(user_qq)
+            if not req or req.is_expired():
+                await event.reply("你当前没有进行中的开发需求。\n发起需求：#dev <你的想法>")
+            else:
+                await event.reply(_status_text(req))
             return
 
         if re.match(r"^#dev\s+(?!cancel|list|help|帮助|\?)\S", text, re.IGNORECASE):
@@ -288,9 +309,11 @@ class DevPlugin(NcatBotPlugin):
 
     async def _approve(self, req: DevRequest, user_qq: str):
         req.state = S_DEVELOPING
+        req.dev_start_at = time.time()
         req.touch()
         await self.api.post_private_msg(user_id=int(ADMIN_QQ), text="✅ 已批准，开始开发...")
-        await self._send_to_user(req, user_qq, "🎉 需求通过审批！正在开发中，完成后通知你。")
+        await self._send_to_user(req, user_qq,
+            "🎉 需求通过审批！AI 正在开发中，预计需要几分钟。\n随时发 #dev status 查看进度。")
         asyncio.create_task(self._run_dev(req, user_qq))
 
     async def _reject(self, req: DevRequest, user_qq: str, reason: str):
@@ -304,6 +327,9 @@ class DevPlugin(NcatBotPlugin):
     async def _run_dev(self, req: DevRequest, user_qq: str):
         snap = await asyncio.get_event_loop().run_in_executor(None, _git_snapshot)
         req.git_snapshot = snap
+
+        # 启动定时推送任务（每2分钟告知用户开发还在进行）
+        push_task = asyncio.create_task(self._dev_progress_push(req, user_qq))
 
         prompt = (
             "你是QiuBot项目开发者。根据需求文档，在 /opt/qiubot 项目里开发新功能。\n\n"
@@ -322,8 +348,11 @@ class DevPlugin(NcatBotPlugin):
             result = "[TIMEOUT]"
         except Exception as e:
             result = "[ERROR] {}".format(e)
+        finally:
+            push_task.cancel()  # 开发结束，停止定时推送
 
         req.dev_result = result
+        req.dev_log = result[:200].strip()  # 保存摘要供 status 查询
         req.touch()
 
         if "[DONE]" in result:
@@ -336,6 +365,8 @@ class DevPlugin(NcatBotPlugin):
                 "回复「上线」重启生效，或「取消」回滚。"
             ).format(done_msg, user_qq)
             await self.api.post_private_msg(user_id=int(ADMIN_QQ), text=admin_msg)
+            await self._send_to_user(req, user_qq,
+                "✅ 开发完成！\n改动内容：{}\n\n正在等待管理员确认上线，稍等片刻～".format(done_msg))
         else:
             await asyncio.get_event_loop().run_in_executor(
                 None, _git_rollback, req.git_snapshot)
@@ -346,6 +377,20 @@ class DevPlugin(NcatBotPlugin):
                 text="❌ 开发失败，已自动回滚。\n错误：{}".format(result[:300]))
             await self._send_to_user(req, user_qq,
                 "😞 开发遇到问题，代码已回滚，请稍后重新提交需求。")
+
+    async def _dev_progress_push(self, req: DevRequest, user_qq: str):
+        """开发过程中每2分钟主动推送一次进度。"""
+        interval = 120  # 2分钟
+        try:
+            while True:
+                await asyncio.sleep(interval)
+                if req.state != S_DEVELOPING:
+                    break
+                elapsed = int((time.time() - req.dev_start_at) / 60)
+                msg = "🛠️ AI 仍在开发中，已用时 {} 分钟...\n发 #dev status 查看详情。".format(elapsed)
+                await self._send_to_user(req, user_qq, msg)
+        except asyncio.CancelledError:
+            pass
 
     async def _deploy(self, req: DevRequest, user_qq: str):
         req.touch()
@@ -492,12 +537,66 @@ def _help_text() -> str:
         "\n"
         "【审批与开发】\n"
         "管理员审批通过后，AI 自动开发，\n"
+        "开发中每2分钟会主动推送进度，\n"
         "完成后管理员确认上线，群里会播报。\n"
+        "━━━━━━━━━━━━━━\n"
+        "常用指令：\n"
+        "#dev <想法>    发起需求\n"
+        "#dev status   查看我的需求进度\n"
+        "#dev help     查看本帮助\n"
         "━━━━━━━━━━━━━━\n"
         "注意事项：\n"
         "· 每人同时只能有一个进行中的需求\n"
         "· 管理员有权拒绝或取消任意需求\n"
-        "· 开发失败会自动回滚，不影响现有功能\n"
-        "━━━━━━━━━━━━━━\n"
-        "#dev help   查看本帮助"
+        "· 开发失败会自动回滚，不影响现有功能"
     )
+
+
+def _status_text(req: DevRequest) -> str:
+    state_label = STATE_LABELS.get(req.state, req.state)
+    elapsed_total = int((time.time() - req.created_at) / 60)
+    lines = [
+        "📋 我的开发需求进度",
+        "━━━━━━━━━━━━━━",
+        "需求：{}".format(req.init_text[:40] + ("..." if len(req.init_text) > 40 else "")),
+        "状态：{} {}".format(_state_icon(req.state), state_label),
+        "提交：{} 分钟前".format(elapsed_total),
+    ]
+
+    if req.state == S_DEVELOPING and req.dev_start_at:
+        dev_elapsed = int((time.time() - req.dev_start_at) / 60)
+        lines.append("开发耗时：{} 分钟".format(dev_elapsed))
+
+    if req.summary and req.state not in (S_CHOOSING_MODE, S_CHATTING):
+        first_line = req.summary.splitlines()[0] if req.summary else ""
+        if first_line:
+            lines.append("需求摘要：{}".format(first_line))
+
+    if req.state == S_PENDING_DEPLOY and req.dev_log:
+        lines.append("开发结果：{}".format(req.dev_log[:80]))
+
+    lines.append("━━━━━━━━━━━━━━")
+
+    next_step = {
+        S_CHOOSING_MODE:    "回复 1 或 2 选择沟通方式",
+        S_CHATTING:         "继续回答机器人的问题",
+        S_CONFIRMING:       "回复「确认」提交审批，或继续修改",
+        S_PENDING_APPROVAL: "等待管理员审批，无需操作",
+        S_DEVELOPING:       "AI 正在开发，请耐心等待",
+        S_PENDING_DEPLOY:   "等待管理员确认上线，无需操作",
+    }.get(req.state, "")
+    if next_step:
+        lines.append("下一步：{}".format(next_step))
+
+    return "\n".join(lines)
+
+
+def _state_icon(state: str) -> str:
+    return {
+        S_CHOOSING_MODE:    "❓",
+        S_CHATTING:         "💬",
+        S_CONFIRMING:       "📝",
+        S_PENDING_APPROVAL: "⏳",
+        S_DEVELOPING:       "🛠️",
+        S_PENDING_DEPLOY:   "✅",
+    }.get(state, "•")
