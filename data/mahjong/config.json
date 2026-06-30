@@ -1,0 +1,27 @@
+{
+  "browser": {
+    "headless": true,
+    "timeout": 60,
+    "max_retries": 3
+  },
+  "analysis": {
+    "default_count": 5,
+    "max_count": 100,
+    "min_count": 5
+  },
+  "task": {
+    "max_concurrent_tasks": 1,
+    "task_timeout": 3600
+  },
+  "rate_limit": {
+    "max_requests_per_user": 3,
+    "window_hours": 24
+  },
+  "storage": {
+    "excel_dir": "data/mahjong/excel"
+  },
+  "amae_koromo": {
+    "base_url": "https://amae-koromo.sapk.ch",
+    "game_mode": "12"
+  }
+}
