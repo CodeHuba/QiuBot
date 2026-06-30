@@ -40,6 +40,9 @@ S_PENDING_APPROVAL = "PENDING_APPROVAL"
 S_DEVELOPING       = "DEVELOPING"
 S_PENDING_DEPLOY   = "PENDING_DEPLOY"
 
+# 正在沟通需求的用户QQ集合，chat_plugin 读取此集合来让位
+ACTIVE_DEV_USERS: set = set()
+
 ANALYST_SYSTEM = (
     "你是一个 QQ 机器人需求分析师，帮助用户把模糊的功能想法变成清晰的开发需求。\n"
     "规则：\n"
@@ -83,6 +86,14 @@ class DevRequest:
 
     def touch(self):
         self.updated_at = time.time()
+
+    def mark_chatting(self):
+        """进入需求沟通状态，加入活跃集合。"""
+        ACTIVE_DEV_USERS.add(self.user_qq)
+
+    def unmark_chatting(self):
+        """离开需求沟通状态，从活跃集合移除。"""
+        ACTIVE_DEV_USERS.discard(self.user_qq)
 
     def is_expired(self) -> bool:
         elapsed = time.time() - self.updated_at
@@ -167,6 +178,7 @@ class DevPlugin(NcatBotPlugin):
                 req = self._requests.pop(target, None)
             if req:
                 await event.reply("✅ 已取消 QQ {} 的需求".format(target))
+                req.unmark_chatting()
                 await self.api.post_private_msg(
                     user_id=int(target), text="你的开发需求已被管理员取消。")
             else:
@@ -259,6 +271,7 @@ class DevPlugin(NcatBotPlugin):
         elif req.state == S_CONFIRMING:
             if text.strip() == "确认":
                 req.state = S_PENDING_APPROVAL
+                req.unmark_chatting()   # 离开沟通阶段
                 req.touch()
                 admin_msg = (
                     "📬 新开发需求待审批\n"
@@ -285,6 +298,7 @@ class DevPlugin(NcatBotPlugin):
 
     async def _begin_chatting(self, req: DevRequest, user_qq: str):
         req.state = S_CHATTING
+        req.mark_chatting()
         req.history.append({"role": "user", "content": req.init_text})
         first_reply = await self._analyst(req)
         req.history.append({"role": "assistant", "content": first_reply})
@@ -293,6 +307,7 @@ class DevPlugin(NcatBotPlugin):
 
     async def _begin_chatting_group(self, req: DevRequest, user_qq: str):
         req.state = S_CHATTING
+        req.mark_chatting()
         req.history.append({"role": "user", "content": req.init_text})
         first_reply = await self._analyst(req)
         req.history.append({"role": "assistant", "content": first_reply})
@@ -319,6 +334,7 @@ class DevPlugin(NcatBotPlugin):
     async def _reject(self, req: DevRequest, user_qq: str, reason: str):
         async with self._lock:
             self._requests.pop(user_qq, None)
+        req.unmark_chatting()
         await self.api.post_private_msg(
             user_id=int(ADMIN_QQ), text="✅ 已拒绝 QQ {} 的需求".format(user_qq))
         await self._send_to_user(req, user_qq,

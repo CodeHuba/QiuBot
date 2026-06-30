@@ -159,6 +159,15 @@ class ChatPlugin(NcatBotPlugin):
         if text and re.match(r"^\s*(#bz\b|[/／]\s*(巴扎|大巴扎)\b)", text, re.IGNORECASE):
             return None
 
+        # 让位给 dev_plugin：用户正在进行需求沟通时，chat 不响应
+        try:
+            from plugins.dev_plugin.dev_plugin import ACTIVE_DEV_USERS
+            user_qq = str(getattr(event, "user_id", ""))
+            if user_qq in ACTIVE_DEV_USERS:
+                return None
+        except ImportError:
+            pass
+
         return text, images, reply_id
 
     # --- 会话 key：群里以群号区分，私聊以 QQ 号区分 ---
