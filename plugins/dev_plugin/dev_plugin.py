@@ -113,8 +113,13 @@ class DevPlugin(NcatBotPlugin):
             if await self._admin_cmd(text, event, is_priv):
                 return
 
+        # #dev help
+        if re.match(r"^#dev\s*(help|帮助|\?)$", text, re.IGNORECASE):
+            await event.reply(_help_text())
+            return
+
         # 发起新需求
-        if re.match(r"^#dev\s+(?!cancel|list)\S", text, re.IGNORECASE):
+        if re.match(r"^#dev\s+(?!cancel|list|help|帮助|\?)\S", text, re.IGNORECASE):
             init = text[len("#dev"):].strip()
             await self._start_request(event, user_qq, group_id, is_priv, init)
             return
@@ -455,3 +460,34 @@ def _restart_qiubot():
             capture_output=True, timeout=30)
     except Exception:
         pass
+
+
+def _help_text() -> str:
+    return (
+        "🤖 QiuBot 功能开发工作流\n"
+        "━━━━━━━━━━━━━━\n"
+        "任何群友都可以向机器人提交新功能需求，\n"
+        "经过需求沟通和管理员审批后，\n"
+        "由 AI 自动开发并上线到机器人。\n"
+        "━━━━━━━━━━━━━━\n"
+        "【发起需求】\n"
+        "#dev <你的想法>\n"
+        "例：#dev 我想要一个每日签到积分功能\n"
+        "\n"
+        "【需求沟通】\n"
+        "机器人会私聊你，通过几轮对话\n"
+        "把你的想法整理成清晰的需求文档。\n"
+        "你可以选择选项，也可以自由描述。\n"
+        "最后回复「确认」提交审批。\n"
+        "\n"
+        "【审批与开发】\n"
+        "管理员审批通过后，AI 自动开发，\n"
+        "完成后管理员确认上线，群里会播报。\n"
+        "━━━━━━━━━━━━━━\n"
+        "注意事项：\n"
+        "· 每人同时只能有一个进行中的需求\n"
+        "· 管理员有权拒绝或取消任意需求\n"
+        "· 开发失败会自动回滚，不影响现有功能\n"
+        "━━━━━━━━━━━━━━\n"
+        "#dev help   查看本帮助"
+    )
