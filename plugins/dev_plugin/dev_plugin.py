@@ -279,18 +279,24 @@ class DevPlugin(NcatBotPlugin):
 
         elif req.state == S_CONFIRMING:
             if text.strip() == "确认":
-                req.state = S_PENDING_APPROVAL
                 req.unmark_chatting()   # 离开沟通阶段
                 req.touch()
-                admin_msg = (
-                    "📬 新开发需求待审批\n"
-                    "提交人：QQ {}\n"
-                    "沟通方式：{}\n\n"
-                    "{}\n\n"
-                    "回复「同意」或「拒绝 [原因]」"
-                ).format(user_qq, "群聊" if req.chat_mode == MODE_GROUP else "私聊", req.summary)
-                await self.api.post_private_msg(user_id=int(ADMIN_QQ), text=admin_msg)
-                await self._send_to_user(req, user_qq, "需求已提交，等待管理员审批 🕐")
+                # 管理员跳过审批，直接开始开发
+                if user_qq == ADMIN_QQ:
+                    await self._send_to_user(req, user_qq,
+                        "✅ 需求已确认，直接开始开发（管理员免审批）🛠️\n随时发 #dev status 查看进度。")
+                    await self._approve(req, user_qq)
+                else:
+                    req.state = S_PENDING_APPROVAL
+                    admin_msg = (
+                        "📬 新开发需求待审批\n"
+                        "提交人：QQ {}\n"
+                        "沟通方式：{}\n\n"
+                        "{}\n\n"
+                        "回复「同意」或「拒绝 [原因]」"
+                    ).format(user_qq, "群聊" if req.chat_mode == MODE_GROUP else "私聊", req.summary)
+                    await self.api.post_private_msg(user_id=int(ADMIN_QQ), text=admin_msg)
+                    await self._send_to_user(req, user_qq, "需求已提交，等待管理员审批 🕐")
             else:
                 req.state = S_CHATTING
                 req.history.append({"role": "user", "content": text})
