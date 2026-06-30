@@ -159,11 +159,13 @@ class ChatPlugin(NcatBotPlugin):
         if text and re.match(r"^\s*(#bz\b|[/／]\s*(巴扎|大巴扎)\b)", text, re.IGNORECASE):
             return None
 
-        # 让位给 dev_plugin：用户正在进行需求沟通时，chat 不响应
+        # 让位给 dev_plugin：#dev 前缀的消息或用户正在沟通需求时，chat 不响应
         try:
             from plugins.dev_plugin.dev_plugin import ACTIVE_DEV_USERS
             user_qq = str(getattr(event, "user_id", ""))
-            if user_qq in ACTIVE_DEV_USERS:
+            clean_text = CQ_AT_ANY_RE.sub("", raw)
+            clean_text = CQ_ANY_RE.sub("", clean_text).strip()
+            if user_qq in ACTIVE_DEV_USERS or re.match(r"^#dev\b", clean_text, re.IGNORECASE):
                 return None
         except ImportError:
             pass
