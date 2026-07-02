@@ -1,0 +1,10 @@
+/**
+ * Schemas Command
+ *
+ * Lists available workflow schemas with descriptions.
+ */
+export interface SchemasOptions {
+    json?: boolean;
+}
+export declare function schemasCommand(options: SchemasOptions): Promise<void>;
+//# sourceMappingURL=schemas.d.ts.map

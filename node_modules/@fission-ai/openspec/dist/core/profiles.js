@@ -1,0 +1,40 @@
+/**
+ * Profile System
+ *
+ * Defines workflow profiles that control which workflows are installed.
+ * Profiles determine WHICH workflows; delivery (in global config) determines HOW.
+ */
+/**
+ * Core workflows included in the 'core' profile.
+ * These provide the streamlined experience for new users.
+ */
+export const CORE_WORKFLOWS = ['propose', 'explore', 'apply', 'sync', 'archive'];
+/**
+ * All available workflows in the system.
+ */
+export const ALL_WORKFLOWS = [
+    'propose',
+    'explore',
+    'new',
+    'continue',
+    'apply',
+    'ff',
+    'sync',
+    'archive',
+    'bulk-archive',
+    'verify',
+    'onboard',
+];
+/**
+ * Resolves which workflows should be active for a given profile configuration.
+ *
+ * - 'core' profile always returns CORE_WORKFLOWS
+ * - 'custom' profile returns the provided customWorkflows, or empty array if not provided
+ */
+export function getProfileWorkflows(profile, customWorkflows) {
+    if (profile === 'custom') {
+        return customWorkflows ?? [];
+    }
+    return CORE_WORKFLOWS;
+}
+//# sourceMappingURL=profiles.js.map

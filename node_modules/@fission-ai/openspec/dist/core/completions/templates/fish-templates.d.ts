@@ -1,0 +1,7 @@
+/**
+ * Static template strings for Fish completion scripts.
+ * These are Fish-specific helper functions that never change.
+ */
+export declare const FISH_STATIC_HELPERS = "# Helper function to check if a subcommand is present\nfunction __fish_openspec_using_subcommand\n    set -l cmd (commandline -opc)\n    set -e cmd[1]\n    for i in $argv\n        if contains -- $i $cmd\n            return 0\n        end\n    end\n    return 1\nend\n\nfunction __fish_openspec_no_subcommand\n    set -l cmd (commandline -opc)\n    test (count $cmd) -eq 1\nend";
+export declare const FISH_DYNAMIC_HELPERS = "# Dynamic completion helpers\n\nfunction __fish_openspec_changes\n    openspec __complete changes 2>/dev/null | while read -l id desc\n        printf '%s\\t%s\\n' \"$id\" \"$desc\"\n    end\nend\n\nfunction __fish_openspec_specs\n    openspec __complete specs 2>/dev/null | while read -l id desc\n        printf '%s\\t%s\\n' \"$id\" \"$desc\"\n    end\nend\n\nfunction __fish_openspec_items\n    __fish_openspec_changes\n    __fish_openspec_specs\nend\n\nfunction __fish_openspec_schemas\n    openspec __complete schemas 2>/dev/null | while read -l id desc\n        printf '%s\\t%s\\n' \"$id\" \"$desc\"\n    end\nend";
+//# sourceMappingURL=fish-templates.d.ts.map

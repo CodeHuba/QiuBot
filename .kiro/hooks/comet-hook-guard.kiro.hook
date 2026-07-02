@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Block code writes in wrong Comet phase (open/design/archive)",
+  "description": "Block code writes in wrong Comet phase (open/design/archive)",
+  "version": "1",
+  "when": {
+    "type": "preToolUse",
+    "toolName": "write"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "bash .kiro/skills/comet/scripts/comet-hook-guard.sh"
+  }
+}

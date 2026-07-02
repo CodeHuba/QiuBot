@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .qwen/skills/comet/scripts/comet-hook-guard.sh",
+            "description": "Block code writes in wrong Comet phase (open/design/archive)"
+          }
+        ]
+      }
+    ]
+  }
+}

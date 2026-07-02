@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "bash": "bash .github/skills/comet/scripts/comet-hook-guard.sh",
+        "powershell": "bash -c 'bash .github/skills/comet/scripts/comet-hook-guard.sh'"
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+/**
+ * Windsurf Command Adapter
+ *
+ * Formats commands for Windsurf following its frontmatter specification.
+ * Windsurf uses a similar format to Claude but may have different conventions.
+ */
+import path from 'path';
+import { escapeYamlValue } from '../yaml.js';
+/**
+ * Formats a tags array as a YAML array with proper escaping.
+ */
+function formatTagsArray(tags) {
+    const escapedTags = tags.map((tag) => escapeYamlValue(tag));
+    return `[${escapedTags.join(', ')}]`;
+}
+/**
+ * Windsurf adapter for command generation.
+ * File path: .windsurf/workflows/opsx-<id>.md
+ * Frontmatter: name, description, category, tags
+ */
+export const windsurfAdapter = {
+    toolId: 'windsurf',
+    getFilePath(commandId) {
+        return path.join('.windsurf', 'workflows', `opsx-${commandId}.md`);
+    },
+    formatFile(content) {
+        return `---
+name: ${escapeYamlValue(content.name)}
+description: ${escapeYamlValue(content.description)}
+category: ${escapeYamlValue(content.category)}
+tags: ${formatTagsArray(content.tags)}
+---
+
+${content.body}
+`;
+    },
+};
+//# sourceMappingURL=windsurf.js.map

@@ -116,6 +116,12 @@ class DevRequest:
         self.created_at   = time.time()
         self.updated_at   = time.time()
         self.dev_start_at: float = 0.0  # 开发开始时间
+        # Comet 工作流相关字段
+        self.comet_change = ""       # OpenSpec change 名称
+        self.comet_phase = ""        # 当前 Comet 阶段 (open/design/build/verify/archive)
+        self.design_doc = ""         # 设计文档路径
+        self.plan_doc = ""           # 计划文档路径
+        self.verify_report = ""      # 验证报告路径
 
     def touch(self):
         self.updated_at = time.time()
@@ -144,10 +150,18 @@ class DevPlugin(NcatBotPlugin):
     async def on_load(self):
         self._requests: dict = {}
         self._lock = asyncio.Lock()
+        # on_load 时重新注册，确保用运行时的 filter_registry 实例
+        try:
+            from ncatbot.plugin_system.builtin_plugin.unified_registry.filter_system.registry import filter_registry
+            from ncatbot.plugin_system.builtin_plugin.unified_registry.filter_system.builtin import NonSelfFilter
+            # 重新注册（如果已有 __filters__ 说明 import 时已注册，需要重新注册到当前实例）
+            filter_registry.add_filter_to_function(DevPlugin.handle_dev, NonSelfFilter())
+        except Exception as e:
+            print("[DevPlugin] 注册 handle 失败: {}".format(e))
         print("[DevPlugin] 已加载 v{}, 管理员={}".format(self.version, ADMIN_QQ))
 
     @on_message
-    async def handle(self, event: BaseMessageEvent):
+    async def handle_dev(self, event: BaseMessageEvent):
         raw  = event.raw_message or ""
         text = CQ_AT_ANY_RE.sub("", raw)
         text = CQ_ANY_RE.sub("", text).strip()
@@ -194,6 +208,9 @@ class DevPlugin(NcatBotPlugin):
         if req and not req.is_expired():
             if is_priv:
                 await self._on_reply(event, req, text, user_qq, is_priv=True)
+            elif req.state == S_CHOOSING_MODE and group_id == req.group_id:
+                # 选择沟通方式阶段，群聊消息也要接收（此时 chat_mode 尚未确定）
+                await self._on_reply(event, req, text, user_qq, is_priv=False)
             elif req.chat_mode == MODE_GROUP and group_id == req.group_id:
                 await self._on_reply(event, req, text, user_qq, is_priv=False)
 
@@ -390,9 +407,18 @@ class DevPlugin(NcatBotPlugin):
         req.state = S_DEVELOPING
         req.dev_start_at = time.time()
         req.touch()
+        
+        # 创建 OpenSpec change 名称（使用时间戳 + 简化摘要）
+        import hashlib
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        summary_hash = hashlib.md5(req.summary.encode()).hexdigest()[:6]
+        req.comet_change = f"qq{user_qq}-{timestamp}-{summary_hash}"
+        
         await self.api.post_private_msg(user_id=int(ADMIN_QQ), text="✅ 已批准，开始开发...")
         await self._send_to_user(req, user_qq,
-            "🎉 需求通过审批！AI 正在开发中，预计需要几分钟。\n随时发 #dev status 查看进度。")
+            "🎉 需求通过审批！AI 正在使用 Comet 工作流开发...\n"
+            "开发过程分为 5 个阶段：Open → Design → Build → Verify → Archive\n"
+            "随时发 #dev status 查看进度。")
         asyncio.create_task(self._run_dev(req, user_qq))
 
     async def _reject(self, req: DevRequest, user_qq: str, reason: str):
@@ -436,21 +462,28 @@ class DevPlugin(NcatBotPlugin):
         snap = await asyncio.get_event_loop().run_in_executor(None, _git_snapshot)
         req.git_snapshot = snap
 
-        # 启动定时推送任务（每2分钟告知用户开发还在进行）
+        # 启动定时推送任务（每1分钟检查 Comet 阶段并推送）
         push_task = asyncio.create_task(self._dev_progress_push(req, user_qq))
 
+        # 使用 Comet 工作流开发
         prompt = (
-            "你是QiuBot项目开发者。根据需求文档，在 /opt/qiubot 项目里开发新功能。\n\n"
-            "需求文档：\n{}\n\n"
+            "使用 Comet 工作流开发 QiuBot 新功能。\n\n"
+            "需求：\n{}\n\n"
+            "执行步骤：\n"
+            "1. /comet-open - 创建 change 名称为: {}\n"
+            "2. /comet-design - 头脑风暴设计方案\n"
+            "3. /comet-build - 实现计划并编码\n"
+            "4. /comet-verify - 测试验证\n"
+            "5. 输出 [DONE] 以及改动摘要\n\n"
             "项目路径：/opt/qiubot\n"
             "插件目录：/opt/qiubot/plugins/\n"
-            "开发完成后输出 [DONE] 以及一句话说明改动。"
-        ).format(req.summary)
+            "注意：务必完成所有阶段，不要跳过 verify。"
+        ).format(req.summary, req.comet_change)
 
         try:
             result = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(None, _call_hermes, prompt),
-                timeout=600
+                asyncio.get_event_loop().run_in_executor(None, _call_hermes_comet, prompt),
+                timeout=1800  # Comet 工作流更长，给 30 分钟
             )
         except asyncio.TimeoutError:
             result = "[TIMEOUT]"
@@ -463,18 +496,31 @@ class DevPlugin(NcatBotPlugin):
         req.dev_log = result[:200].strip()  # 保存摘要供 status 查询
         req.touch()
 
+        # 尝试读取 Comet 生成的文档路径
+        await asyncio.get_event_loop().run_in_executor(None, self._collect_comet_artifacts, req)
+
         if "[DONE]" in result:
             done_msg = result[result.index("[DONE]") + 6:].strip().splitlines()[0]
             req.state = S_PENDING_DEPLOY
+            
+            # 构建包含 Comet 文档的通知
+            artifact_info = ""
+            if req.design_doc:
+                artifact_info += f"\n📄 设计文档：{req.design_doc}"
+            if req.plan_doc:
+                artifact_info += f"\n📋 计划文档：{req.plan_doc}"
+            if req.verify_report:
+                artifact_info += f"\n✅ 验证报告：{req.verify_report}"
+            
             admin_msg = (
-                "🛠️ 开发完成！\n"
+                "🛠️ Comet 开发完成！\n"
                 "改动：{}\n"
-                "提交人：QQ {}\n\n"
-                "回复「上线」重启生效，或「取消」回滚。"
-            ).format(done_msg, user_qq)
+                "提交人：QQ {}{}\n\n"
+                "回复「上线」归档并重启生效，或「取消」回滚。"
+            ).format(done_msg, user_qq, artifact_info)
             await self.api.post_private_msg(user_id=int(ADMIN_QQ), text=admin_msg)
             await self._send_to_user(req, user_qq,
-                "✅ 开发完成！\n改动内容：{}\n\n正在等待管理员确认上线，稍等片刻～".format(done_msg))
+                "✅ 开发完成！\n改动内容：{}{}\n\n正在等待管理员确认上线，稍等片刻～".format(done_msg, artifact_info))
         else:
             await asyncio.get_event_loop().run_in_executor(
                 None, _git_rollback, req.git_snapshot)
@@ -487,34 +533,74 @@ class DevPlugin(NcatBotPlugin):
                 "😞 开发遇到问题，代码已回滚，请稍后重新提交需求。")
 
     async def _dev_progress_push(self, req: DevRequest, user_qq: str):
-        """开发过程中每2分钟主动推送一次进度。"""
-        interval = 120  # 2分钟
+        """开发过程中每1分钟检查 Comet 阶段并推送进度。"""
+        interval = 60  # 1分钟
+        last_phase = ""
         try:
             while True:
                 await asyncio.sleep(interval)
                 if req.state != S_DEVELOPING:
                     break
-                elapsed = int((time.time() - req.dev_start_at) / 60)
-                msg = "🛠️ AI 仍在开发中，已用时 {} 分钟...\n发 #dev status 查看详情。".format(elapsed)
-                await self._send_to_user(req, user_qq, msg)
+                
+                # 读取 Comet 当前阶段
+                phase = await asyncio.get_event_loop().run_in_executor(
+                    None, _read_comet_phase, req.comet_change)
+                
+                # 阶段变化时推送通知
+                if phase and phase != last_phase and phase != "unknown":
+                    req.comet_phase = phase
+                    phase_label = {
+                        "open": "📝 需求整理中 (Open)",
+                        "design": "🎨 设计头脑风暴中 (Design)",
+                        "build": "🛠️ 编码实现中 (Build)",
+                        "verify": "✅ 测试验证中 (Verify)",
+                        "archive": "📦 归档中 (Archive)",
+                    }.get(phase, phase)
+                    
+                    elapsed = int((time.time() - req.dev_start_at) / 60)
+                    msg = "🔄 {}\n已用时 {} 分钟".format(phase_label, elapsed)
+                    await self._send_to_user(req, user_qq, msg)
+                    last_phase = phase
+                elif not phase or phase == "unknown":
+                    # Comet 状态未就绪，回退到简单的时间提示
+                    elapsed = int((time.time() - req.dev_start_at) / 60)
+                    msg = "🛠️ AI 仍在开发中，已用时 {} 分钟...\n发 #dev status 查看详情。".format(elapsed)
+                    await self._send_to_user(req, user_qq, msg)
         except asyncio.CancelledError:
             pass
 
     async def _deploy(self, req: DevRequest, user_qq: str):
         req.touch()
+        
+        # 1. 先执行 Comet 归档（如果 change 存在）
+        if req.comet_change:
+            await self.api.post_private_msg(
+                user_id=int(ADMIN_QQ), text="📦 正在执行 Comet 归档...")
+            archive_result = await asyncio.get_event_loop().run_in_executor(
+                None, _run_comet_archive, req.comet_change)
+            if "success" not in archive_result.lower() and "error" not in archive_result.lower():
+                # 归档成功或部分成功
+                pass
+        
+        # 2. Git 提交并推送
         await asyncio.get_event_loop().run_in_executor(
             None, _git_commit_push, req.summary[:50])
+        
+        # 3. 重启 QiuBot
         await asyncio.get_event_loop().run_in_executor(None, _restart_qiubot)
 
-        # 写入插件归属：新建插件才写，修改已有插件不覆盖原归属
+        # 4. 写入插件归属：新建插件才写，修改已有插件不覆盖原归属
         if not req.target_plugin and req.summary:
             # 新插件：让 AI 从摘要里推断插件目录名
             asyncio.create_task(self._register_new_plugin(req, user_qq))
 
         async with self._lock:
             self._requests.pop(user_qq, None)
+        
+        archive_note = "\n📦 已归档到 OpenSpec" if req.comet_change else ""
         await self.api.post_private_msg(
-            user_id=int(ADMIN_QQ), text="✅ 已上线并重启 QiuBot，代码已推送到 GitHub。")
+            user_id=int(ADMIN_QQ), 
+            text="✅ 已上线并重启 QiuBot，代码已推送到 GitHub。{}".format(archive_note))
         await self._send_to_user(req, user_qq, "🚀 功能已上线！QiuBot 已重启，去群里试试吧～")
         if req.group_id:
             first_line = req.summary.splitlines()[0] if req.summary else "新功能"
@@ -637,25 +723,44 @@ class DevPlugin(NcatBotPlugin):
 
 
 async def _call_claude(messages: list, system: str) -> str:
-    url = "{}/v1/messages".format(BASE_URL)
-    headers = {
-        "x-api-key": API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL,
-        "max_tokens": 1024,
-        "system": system,
-        "messages": messages,
-    }
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        r = await client.post(url, headers=headers, json=payload)
-        data = r.json()
-    if r.status_code >= 400:
-        raise RuntimeError("HTTP {}: {}".format(r.status_code, data.get("error", data)))
-    content = data.get("content") or []
-    return "\n".join(b["text"] for b in content if b.get("type") == "text").strip()
+    """通过 Hermes 调用 Claude（复用 Hermes 配置的模型）。"""
+    # 构造 prompt：system + 对话历史
+    prompt_parts = [f"系统提示：\n{system}\n\n对话历史："]
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        prompt_parts.append(f"{role}: {content}")
+    full_prompt = "\n".join(prompt_parts)
+    
+    # 在线程池里同步调用 Hermes，避免阻塞事件循环
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _call_hermes_simple, full_prompt)
+    if result.startswith("[ERROR]") or result.startswith("[TIMEOUT]"):
+        raise RuntimeError(result)
+    return result
+
+
+def _call_hermes_simple(prompt: str) -> str:
+    """同步调用 Hermes，用于需求分析等短任务。"""
+    import shutil
+    hermes_bin = Path.home() / ".local" / "bin" / "hermes"
+    if not hermes_bin.exists():
+        h = shutil.which("hermes")
+        hermes_bin = Path(h) if h else None
+    if not hermes_bin:
+        return "[ERROR] 找不到 hermes"
+    try:
+        r = subprocess.run(
+            [str(hermes_bin), "chat", "-q", prompt, "--yolo"],
+            capture_output=True, text=True,
+            timeout=120, cwd="/opt/qiubot"
+        )
+        output = (r.stdout or "").strip()
+        return output if output else "[ERROR] hermes 无输出"
+    except subprocess.TimeoutExpired:
+        return "[TIMEOUT]"
+    except Exception as e:
+        return "[ERROR] {}".format(e)
 
 
 def _call_hermes(prompt: str) -> str:
@@ -673,6 +778,110 @@ def _call_hermes(prompt: str) -> str:
             timeout=580, cwd="/opt/qiubot"
         )
         return (r.stdout or "").strip() or "[hermes 无输出]"
+    except subprocess.TimeoutExpired:
+        return "[TIMEOUT]"
+    except Exception as e:
+        return "[ERROR] {}".format(e)
+
+
+def _call_hermes_comet(prompt: str) -> str:
+    """调用 Hermes 执行 Comet 工作流（更长超时 + Comet 技能路径）。"""
+    import shutil
+    hermes_bin = Path.home() / ".local" / "bin" / "hermes"
+    if not hermes_bin.exists():
+        h = shutil.which("hermes")
+        hermes_bin = Path(h) if h else None
+    if not hermes_bin:
+        return "[ERROR] 找不到 hermes"
+    try:
+        r = subprocess.run(
+            [str(hermes_bin), "chat", "-q", prompt, "--yolo"],
+            capture_output=True, text=True,
+            timeout=1750,  # 给 Comet 完整工作流足够时间
+            cwd="/opt/qiubot",
+            env={**__import__("os").environ, "COMET_AUTO_TRANSITION": "true"}
+        )
+        return (r.stdout or "").strip() or "[hermes 无输出]"
+    except subprocess.TimeoutExpired:
+        return "[TIMEOUT]"
+    except Exception as e:
+        return "[ERROR] {}".format(e)
+
+
+def _read_comet_phase(change_name: str) -> str:
+    """读取 OpenSpec change 对应的 .comet.yaml 当前阶段。"""
+    if not change_name:
+        return "unknown"
+    comet_yaml = Path("/opt/qiubot/openspec/changes") / change_name / ".comet.yaml"
+    if not comet_yaml.exists():
+        return "unknown"
+    try:
+        import yaml
+        data = yaml.safe_load(comet_yaml.read_text(encoding="utf-8")) or {}
+        return data.get("phase", "unknown")
+    except Exception:
+        # yaml 不可用时用简单文本解析
+        try:
+            text = comet_yaml.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                if line.strip().startswith("phase:"):
+                    return line.split(":", 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            pass
+    return "unknown"
+
+
+def _collect_comet_artifacts(self, req: DevRequest):
+    """从 .comet.yaml 读取生成的文档路径。"""
+    if not req.comet_change:
+        return
+    comet_yaml = Path("/opt/qiubot/openspec/changes") / req.comet_change / ".comet.yaml"
+    if not comet_yaml.exists():
+        return
+    try:
+        import yaml
+        data = yaml.safe_load(comet_yaml.read_text(encoding="utf-8")) or {}
+        req.design_doc = data.get("design_doc", "")
+        req.plan_doc = data.get("plan", "")
+        req.verify_report = data.get("verification_report", "")
+    except Exception:
+        # yaml 解析失败，尝试文本解析
+        try:
+            text = comet_yaml.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith("design_doc:"):
+                    req.design_doc = line.split(":", 1)[1].strip().strip('"').strip("'")
+                elif line.startswith("plan:"):
+                    req.plan_doc = line.split(":", 1)[1].strip().strip('"').strip("'")
+                elif line.startswith("verification_report:"):
+                    req.verify_report = line.split(":", 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            pass
+
+
+def _run_comet_archive(change_name: str) -> str:
+    """执行 Comet 归档命令。"""
+    if not change_name:
+        return "[ERROR] 无 change 名称"
+    try:
+        import shutil
+        hermes_bin = Path.home() / ".local" / "bin" / "hermes"
+        if not hermes_bin.exists():
+            h = shutil.which("hermes")
+            hermes_bin = Path(h) if h else None
+        if not hermes_bin:
+            return "[ERROR] 找不到 hermes"
+        
+        # 调用 /comet-archive
+        r = subprocess.run(
+            [str(hermes_bin), "chat", "-q", "/comet-archive", "--yolo"],
+            capture_output=True, text=True,
+            timeout=300,
+            cwd="/opt/qiubot"
+        )
+        output = (r.stdout or "").strip()
+        return output if output else "[归档完成]"
     except subprocess.TimeoutExpired:
         return "[TIMEOUT]"
     except Exception as e:
@@ -780,6 +989,17 @@ def _status_text(req: DevRequest) -> str:
     if req.state == S_DEVELOPING and req.dev_start_at:
         dev_elapsed = int((time.time() - req.dev_start_at) / 60)
         lines.append("开发耗时：{} 分钟".format(dev_elapsed))
+        
+        # 显示 Comet 阶段
+        if req.comet_phase:
+            phase_label = {
+                "open": "📝 Open (需求整理)",
+                "design": "🎨 Design (头脑风暴)",
+                "build": "🛠️ Build (编码实现)",
+                "verify": "✅ Verify (测试验证)",
+                "archive": "📦 Archive (归档)",
+            }.get(req.comet_phase, req.comet_phase)
+            lines.append("当前阶段：{}".format(phase_label))
 
     if req.summary and req.state not in (S_CHOOSING_MODE, S_CHATTING):
         first_line = req.summary.splitlines()[0] if req.summary else ""
@@ -796,7 +1016,7 @@ def _status_text(req: DevRequest) -> str:
         S_CHATTING:         "继续回答机器人的问题",
         S_CONFIRMING:       "回复「确认」提交审批，或继续修改",
         S_PENDING_APPROVAL: "等待管理员审批，无需操作",
-        S_DEVELOPING:       "AI 正在开发，请耐心等待",
+        S_DEVELOPING:       "AI 正在使用 Comet 工作流开发，请耐心等待",
         S_PENDING_DEPLOY:   "等待管理员确认上线，无需操作",
     }.get(req.state, "")
     if next_step:

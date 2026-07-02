@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "write_file|edit_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .gemini/skills/comet/scripts/comet-hook-guard.sh",
+            "name": "Block code writes in wrong Comet phase (open/design/archive)"
+          }
+        ]
+      }
+    ]
+  }
+}
