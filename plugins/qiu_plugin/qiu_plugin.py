@@ -25,3 +25,15 @@ class QiuPlugin(NcatBotPlugin):
         if message and message.strip() == "你是谁":
             print(f"[QiuPlugin] 匹配成功，准备回复")
             await event.reply("我是崭新出炉的丘bot~")
+
+    @on_message
+    async def handle_ping(self, event: BaseMessageEvent):
+        """处理 /ping 指令，群聊中回复 pong"""
+        message = event.raw_message
+        if not message:
+            return
+        # 仅响应群聊消息
+        if getattr(event, "message_type", None) != "group":
+            return
+        if message.strip() == "/ping":
+            await event.reply("pong")
