@@ -150,14 +150,6 @@ class DevPlugin(NcatBotPlugin):
     async def on_load(self):
         self._requests: dict = {}
         self._lock = asyncio.Lock()
-        # on_load 时重新注册，确保用运行时的 filter_registry 实例
-        try:
-            from ncatbot.plugin_system.builtin_plugin.unified_registry.filter_system.registry import filter_registry
-            from ncatbot.plugin_system.builtin_plugin.unified_registry.filter_system.builtin import NonSelfFilter
-            # 重新注册（如果已有 __filters__ 说明 import 时已注册，需要重新注册到当前实例）
-            filter_registry.add_filter_to_function(DevPlugin.handle_dev, NonSelfFilter())
-        except Exception as e:
-            print("[DevPlugin] 注册 handle 失败: {}".format(e))
         print("[DevPlugin] 已加载 v{}, 管理员={}".format(self.version, ADMIN_QQ))
 
     @on_message
@@ -831,7 +823,7 @@ def _read_comet_phase(change_name: str) -> str:
     return "unknown"
 
 
-def _collect_comet_artifacts(self, req: DevRequest):
+def _collect_comet_artifacts(req: DevRequest):
     """从 .comet.yaml 读取生成的文档路径。"""
     if not req.comet_change:
         return

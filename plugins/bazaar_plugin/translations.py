@@ -47,7 +47,7 @@ def get_en(name_zh: str) -> str | None:
 
 
 def search_zh(query: str, limit: int = 10) -> list[str]:
-    """中文模糊查询,返回英文名列表(子串匹配)。"""
+    """中文模糊查询,返回英文名列表(完整匹配优先,然后按长度升序)。"""
     q = query.strip()
     if not q:
         return []
@@ -55,14 +55,13 @@ def search_zh(query: str, limit: int = 10) -> list[str]:
     exact = _zh_to_en.get(q)
     if exact:
         return [exact]
-    # 子串匹配
+    # 子串匹配,按中文名长度排序(短的优先,如「围巾」优先于「杜利的围巾」)
     results = []
     for zh, en in _zh_to_en.items():
         if q in zh:
-            results.append(en)
-            if len(results) >= limit:
-                break
-    return results
+            results.append((len(zh), en))
+    results.sort()  # 按长度排序
+    return [en for _, en in results[:limit]]
 
 
 def has_chinese(s: str) -> bool:

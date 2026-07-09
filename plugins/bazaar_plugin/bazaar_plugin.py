@@ -54,6 +54,14 @@ class BazaarPlugin(NcatBotPlugin):
     async def on_load(self):
         self.client = BazaarDataClient()
         self._cooldown: dict[tuple, float] = defaultdict(float)
+        # 同步加载卡图映射（不依赖网络，立即可用）
+        _tex_map_path = Path(__file__).resolve().parent / "cache" / "item_tex_map.json"
+        if _tex_map_path.exists():
+            import json as _json
+            self._tex_map = _json.loads(_tex_map_path.read_text(encoding="utf-8"))
+            print(f"[BazaarPlugin] 卡图映射加载: {len(self._tex_map)} 条")
+        else:
+            self._tex_map: dict = {}
         # 启动时异步加载（不阻塞插件 on_load 完成）
         asyncio.create_task(self._init_data())
         # 注册每日 10:00 推送任务
@@ -69,9 +77,15 @@ class BazaarPlugin(NcatBotPlugin):
             await self.client.bootstrap()
             s = self.client.status()
             print(f"[{self.name}] 数据就绪: items={s['items']} skills={s['skills']} merchants={s['merchants']} days={s['encounter_days']}")
-            # 同步 tooltip 翻译缓存的版本号(items+skills 版本变了就清空旧翻译)
+            # 同步 tooltip 翻译缓存的版本号
             combined_ver = s["versions"].get("items", "") + "|" + s["versions"].get("skills", "")
             tt_trans.set_version(combined_ver)
+            # 加载卡图映射
+            _tex_map_path = Path(__file__).resolve().parent / "cache" / "item_tex_map.json"
+            if _tex_map_path.exists():
+                import json as _json
+                self._tex_map = _json.loads(_tex_map_path.read_text(encoding="utf-8"))
+                print(f"[{self.name}] 卡图映射加载: {len(self._tex_map)} 条")
         except Exception as e:
             print(f"[{self.name}] 数据加载失败: {e}")
 
@@ -161,10 +175,10 @@ class BazaarPlugin(NcatBotPlugin):
             return await self._cmd_player_history(username_h, event, colorblind=colorblind)
 
         if sub == "item":
-            return await self._cmd_item(arg)
+            return await self._cmd_item(arg, event=event)
 
         if sub == "skill":
-            return await self._cmd_skill(arg)
+            return await self._cmd_skill(arg, event=event)
 
         if sub == "npc":
             return self._cmd_npc(arg)
@@ -285,7 +299,7 @@ class BazaarPlugin(NcatBotPlugin):
             return "[巴扎] 数据还在加载中，稍等几秒再试"
         return None
 
-    async def _cmd_item(self, arg: str) -> str:
+    async def _cmd_item(self, arg: str, event: BaseMessageEvent | None = None) -> str:
         guard = self._ensure_loaded()
         if guard:
             return guard
@@ -304,7 +318,7 @@ class BazaarPlugin(NcatBotPlugin):
             return fmt.format_candidates(candidates, "物品")
         return f"找不到物品『{arg}』"
 
-    async def _cmd_skill(self, arg: str) -> str:
+    async def _cmd_skill(self, arg: str, event: BaseMessageEvent | None = None) -> str:
         guard = self._ensure_loaded()
         if guard:
             return guard
@@ -318,6 +332,30 @@ class BazaarPlugin(NcatBotPlugin):
         if candidates:
             return fmt.format_candidates(candidates, "技能")
         return f"找不到技能『{arg}』"
+
+    async def _send_card_image(self, item_name: str, event: BaseMessageEvent):
+        """发卡图，失败静默"""
+        try:
+            tex_name = self._tex_map.get(item_name)
+            if not tex_name:
+                return
+            img_path = Path(__file__).resolve().parent / "cache" / "card_images" / (tex_name + ".png")
+            if not img_path.exists():
+                return
+            # ncatbot image= 参数需要 base64:// 格式
+            import base64
+            img_b64 = "base64://" + base64.b64encode(img_path.read_bytes()).decode()
+            is_private = getattr(event, "message_type", None) == "private"
+            if is_private:
+                uid = getattr(event, "user_id", 0)
+                await self.api.post_private_msg(user_id=uid, image=img_b64)
+            else:
+                gid = getattr(event, "group_id", 0)
+                await self.api.post_group_msg(group_id=gid, image=img_b64)
+        except Exception as e:
+            import traceback
+            with open("/tmp/bz_card_err.txt", "a") as f:
+                f.write(repr(e) + "\n" + traceback.format_exc() + "\n")
 
     async def _translate_tooltips(self, entity: dict) -> dict:
         """收集所有 tier + 附魔 的 tooltips，并发翻译，返回 {英文: 中文} 字典。"""

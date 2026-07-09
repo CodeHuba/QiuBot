@@ -205,10 +205,6 @@ class ChatPlugin(NcatBotPlugin):
         # 留给 QiuPlugin 处理的关键词（且没图也没引用）→ 让它单独回，不重复
         if not images and not reply_id and text in {"你是谁", "你好", "hi", "hello", "再见", "拜拜"}:
             return
-        
-        # 纯文本 @Bot（无图、无引用）交给 agent_plugin 处理
-        if not images and not reply_id and text and not text.startswith("#"):
-            return
 
         # === 拉取引用的消息 ===
         quoted_text = ""

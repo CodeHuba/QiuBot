@@ -12,17 +12,6 @@ from pathlib import Path
 
 import httpx
 
-# GameData.db 本地数据源
-try:
-    from .gamedata_client import GameDataClient
-    _GAMEDATA_AVAILABLE = True
-except ImportError:
-    try:
-        from gamedata_client import GameDataClient
-        _GAMEDATA_AVAILABLE = True
-    except ImportError:
-        _GAMEDATA_AVAILABLE = False
-
 # ---- 端点 ----
 HOWBAZAAR_BASE = "https://www.howbazaar.gg"
 MRMAO_BASE = "https://bazaar.mrmao.life"
@@ -71,50 +60,13 @@ class BazaarDataClient:
 
     # ===== 启动加载 =====
     async def bootstrap(self):
-        """启动时调用：优先从 GameData.db 加载 items/skills，再刷新 merchants/encounters。"""
-        # 1. 从 GameData.db 加载 items/skills（本地，最新）
-        self._load_from_gamedata()
-        # 2. 从本地缓存加载 merchants/encounters
-        self._load_local_aux()
-        # 3. 异步刷新 merchants/encounters
+        """启动时调用：先读本地缓存，再异步刷新。"""
+        self._load_local()
         try:
             await self.refresh(force=False)
         except Exception as e:
             print(f"[BazaarDataClient] 启动刷新失败（沿用本地缓存）: {e}")
         self._rebuild_index()
-
-    def _load_from_gamedata(self):
-        """从 GameData.db 加载 items/skills。"""
-        if not _GAMEDATA_AVAILABLE:
-            print("[BazaarDataClient] GameDataClient 不可用，跳过")
-            return
-        db_path = CACHE_DIR / "GameData.db"
-        if not db_path.exists():
-            print(f"[BazaarDataClient] GameData.db 不存在，跳过")
-            return
-        try:
-            gdc = GameDataClient(db_path)
-            gdc.load()
-            self.wiki["items"] = gdc.items()
-            self.wiki["skills"] = gdc.skills()
-        except Exception as e:
-            print(f"[BazaarDataClient] GameData.db 加载失败: {e}")
-
-    def _load_local_aux(self):
-        """加载 merchants/encounters 本地缓存。"""
-        if VERSIONS_FILE.exists():
-            try:
-                self.versions = json.loads(VERSIONS_FILE.read_text(encoding="utf-8"))
-            except Exception:
-                self.versions = {}
-        for name in ("merchants", "encounters"):
-            p = CACHE_DIR / f"{name}.json.gz"
-            if p.exists():
-                try:
-                    with gzip.open(p, "rt", encoding="utf-8") as f:
-                        self.wiki[name] = json.load(f)
-                except Exception as e:
-                    print(f"[BazaarDataClient] 读取本地 {name} 失败: {e}")
 
     def _load_local(self):
         if VERSIONS_FILE.exists():
@@ -155,9 +107,6 @@ class BazaarDataClient:
 
                 tasks = []
                 for name, path in WIKI_ENDPOINTS.items():
-                    # items/skills 已从 GameData.db 加载，跳过
-                    if name in ("items", "skills") and self.wiki.get(name):
-                        continue
                     expected = root_versions.get(name)
                     current = self.versions.get(name)
                     if force or not self.wiki.get(name) or (expected and expected != current):
