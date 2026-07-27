@@ -295,6 +295,47 @@ def create_tools() -> List[BaseTool]:
         tools.append(get_hero_stats)
         print("[Tools] ✓ get_hero_stats 工具已加载")
 
+        # ===== 每日物品品质概率工具 =====
+        DAY_ODDS = {
+            1:  {"青铜": 100, "白银": 0,  "黄金": 0,  "钻石": 0},
+            2:  {"青铜": 90,  "白银": 10, "黄金": 0,  "钻石": 0},
+            3:  {"青铜": 70,  "白银": 30, "黄金": 0,  "钻石": 0},
+            4:  {"青铜": 50,  "白银": 50, "黄金": 0,  "钻石": 0},
+            5:  {"青铜": 25,  "白银": 75, "黄金": 0,  "钻石": 0},
+            6:  {"青铜": 0,   "白银": 95, "黄金": 5,  "钻石": 0},
+            7:  {"青铜": 0,   "白银": 80, "黄金": 20, "钻石": 0},
+            8:  {"青铜": 0,   "白银": 60, "黄金": 40, "钻石": 0},
+            9:  {"青铜": 0,   "白银": 35, "黄金": 60, "钻石": 5},
+            10: {"青铜": 0,   "白银": 20, "黄金": 70, "钻石": 10},
+        }
+
+        @tool
+        def query_day_odds(day: int) -> str:
+            """查询 The Bazaar 游戏中某一天商店刷新时各品质物品的出现概率。
+            品质从低到高依次为：青铜 < 白银 < 黄金 < 钻石。
+            第10天及以后概率相同。
+
+            Args:
+                day: 游戏天数（整数，1 及以上）
+
+            Returns:
+                该天各品质物品的出现概率
+            """
+            key = min(day, 10)
+            if key < 1:
+                return "天数必须大于等于 1"
+            odds = DAY_ODDS[key]
+            label = f"第 {day} 天" if day <= 10 else f"第 {day} 天（第10天及以后概率相同）"
+            lines = [f"🎲 {label} 物品品质概率："]
+            for quality, pct in odds.items():
+                if pct > 0:
+                    bar = "█" * (pct // 5)
+                    lines.append(f"  {quality}：{pct}% {bar}")
+            return "\n".join(lines)
+
+        tools.append(query_day_odds)
+        print("[Tools] ✓ query_day_odds 工具已加载")
+
     except Exception as e:
         print(f"[Tools] ⚠️ 加载 Bazaar 工具失败: {e}")
 

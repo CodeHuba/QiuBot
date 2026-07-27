@@ -59,7 +59,7 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
     """
     atype = action.get("$type", "")
 
-    # 修改属性类动作：读 AttributeType
+    # 修改属性类动作：优先从 Value 读取，fallback 到 AttributeType
     if atype in (
         "TActionCardModifyAttribute",
         "TAuraActionCardModifyAttribute",
@@ -67,19 +67,19 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
         "TAuraActionPlayerModifyAttribute",
     ):
         attr_type = action.get("AttributeType", "")
+        val = action.get("Value", {})
+        if isinstance(val, dict):
+            vtype = val.get("$type", "")
+            if vtype == "TFixedValue":
+                return val.get("Value"), attr_type
+            # TReferenceValueCardAttribute / TReferenceValuePlayerAttribute
+            if "ReferenceValue" in vtype or vtype.endswith("Attribute"):
+                ref_attr = val.get("AttributeType", "")
+                if ref_attr and ref_attr in tier_attrs:
+                    return tier_attrs[ref_attr], ref_attr
+        # Value 为 null，fallback 到读 AttributeType
         if attr_type and attr_type in tier_attrs:
             return tier_attrs[attr_type], attr_type
-        val = action.get("Value", {})
-        if not isinstance(val, dict):
-            return None, ""
-        vtype = val.get("$type", "")
-        if vtype == "TFixedValue":
-            return val.get("Value"), attr_type
-        # TReferenceValueCardAttribute / TReferenceValuePlayerAttribute
-        if "ReferenceValue" in vtype or vtype.endswith("Attribute"):
-            ref_attr = val.get("AttributeType", "")
-            if ref_attr and ref_attr in tier_attrs:
-                return tier_attrs[ref_attr], ref_attr
         return None, ""
 
     # 直接动作：从 ACTION_ATTR_MAP 映射
@@ -209,7 +209,10 @@ def convert_item_to_howbazaar_format(item_data: dict) -> dict:
     tiers: dict = {}
     for tier_name in ["Bronze", "Silver", "Gold", "Diamond", "Legendary"]:
         if tier_name in item_data.get("Tiers", {}):
-            tiers[tier_name] = {"tooltips": get_tier_tooltips(item_data, tier_name)}
+            tiers[tier_name] = {
+                "tooltips": get_tier_tooltips(item_data, tier_name),
+                "raw_attrs": build_tier_attrs(item_data, tier_name),
+            }
 
     # 构建 enchantments
     enchantments: list[dict] = []
@@ -246,7 +249,10 @@ def convert_skill_to_howbazaar_format(skill_data: dict) -> dict:
     tiers: dict = {}
     for tier_name in ["Bronze", "Silver", "Gold", "Diamond", "Legendary"]:
         if tier_name in skill_data.get("Tiers", {}):
-            tiers[tier_name] = {"tooltips": get_tier_tooltips(skill_data, tier_name)}
+            tiers[tier_name] = {
+                "tooltips": get_tier_tooltips(skill_data, tier_name),
+                "raw_attrs": build_tier_attrs(skill_data, tier_name),
+            }
 
     unified = get_tier_tooltips(skill_data, skill_data.get("StartingTier", "Bronze"))
 

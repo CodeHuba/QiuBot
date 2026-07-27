@@ -52,7 +52,7 @@ TAG_ZH = {
     "Apparel": "服装",
     "Property": "房产",
     "Vehicle": "载具",
-    "Aquatic": "水栖",
+    "Aquatic": "水系",
     "Dinosaur": "恐龙",
     "Dragon": "龙",
     "Drone": "无人机",
@@ -136,10 +136,10 @@ ENCHANT_ZH = {
 
 
 def _bilingual_name(name_en: str) -> str:
-    """返回双语名称: 英文名 or 中文名 (英文名)"""
+    """返回名称：优先中文，无翻译时显示英文"""
     zh = translations.get_zh(name_en)
     if zh:
-        return f"{zh} ({name_en})"
+        return zh  # 只显示中文
     return name_en
 
 
@@ -152,6 +152,7 @@ def format_help() -> str:
         "#bz history <用户名> 最近5天对局记录\n"
         "#bz item <名字>      查物品\n"
         "#bz skill <名字>     查技能\n"
+        "#bz db <名字>        查卡牌(bazaardb.gg 在线数据，支持中英文)\n"
         "#bz npc <名字>       查商人\n"
         "#bz day <1-10|event> 列当日 encounter\n"
         "#bz boss <名字>      查 encounter 详情\n"
@@ -163,7 +164,7 @@ def format_help() -> str:
         "─\n"
         "#bz status           缓存状态\n"
         "━━━━━━━━━━━━━━\n"
-        "示例: #bz watch qifeiovo    #bz item lugnut"
+        "示例: #bz watch qifeiovo    #bz db 万剑之王"
     )
 
 
@@ -219,12 +220,38 @@ def _tier_lines(tiers: dict, translated_map: dict | None = None) -> list[str]:
         for t in tips:
             # 优先用翻译
             zh = (translated_map or {}).get(t) if translated_map else None
+            # 如果没有翻译，尝试从缓存读取
+            if not zh:
+                zh = tt_trans.get_translation(t)
+            # 如果还是没有，用术语表做简单替换
+            if not zh:
+                zh = _apply_glossary(t)
             display = zh if zh else t
             lines.append(f"  · {display}")
     return lines
 
 
+def _apply_glossary(text: str) -> str:
+    """用术语表做简单替换，处理常见英文句式"""
+    import re
+    result = text
+    # 先替换多词短语（从长到短，避免被单词替换截断）
+    sorted_terms = sorted(tt_trans.GLOSSARY.items(), key=lambda x: -len(x[0]))
+    for en, zh in sorted_terms:
+        result = result.replace(en, zh)
+    # 额外处理时间单位变形
+    result = re.sub(r'\bseconds?\b', '秒', result)
+    result = re.sub(r'\bitems?\b', '个物品', result)
+    # 处理动词变形（减速s → 减速）
+    result = re.sub(r'(减速|冻结|燃烧|治疗|护盾|毒素|回复)s\b', r'\1', result)
+    return result
+
+
 def format_item(item: dict, with_all_enchants: bool = False, translated_tooltips: dict | None = None) -> str:
+    # 未传入翻译时自动用 tt_trans 逐条翻译
+    _auto_translate = translated_tooltips is None
+    if translated_tooltips is None:
+        translated_tooltips = {}
     name = item.get("name") or "?"
     size = SIZE_ZH.get(item.get("size") or "", item.get("size") or "?")
     starting = TIER_ICON.get(item.get("startingTier") or "", item.get("startingTier") or "?")
@@ -280,20 +307,27 @@ def format_item(item: dict, with_all_enchants: bool = False, translated_tooltips
 
 def _add_enchant(lines: list[str], e: dict, translated_tooltips: dict | None = None):
     typ = e.get("type") or "?"
-    icon = ENCHANT_ICON.get(typ, "·")
     typ_zh = ENCHANT_ZH.get(typ, typ)
     tips = e.get("tooltips") or []
     if tips:
         t0 = translated_tooltips.get(tips[0], tips[0]) if translated_tooltips else tips[0]
-        lines.append(f"  {icon} {typ_zh}: {t0}")
+        if t0 == tips[0]:
+            t0 = tt_trans.get_translation(tips[0]) or _apply_glossary(tips[0])
+        lines.append(f"  {typ_zh}: {t0}")
         for t in tips[1:]:
             t_zh = translated_tooltips.get(t, t) if translated_tooltips else t
+            if t_zh == t:
+                t_zh = tt_trans.get_translation(t) or _apply_glossary(t)
             lines.append(f"        {t_zh}")
     else:
-        lines.append(f"  {icon} {typ_zh}")
+        lines.append(f"  {typ_zh}")
 
 
 def format_skill(skill: dict, translated_tooltips: dict | None = None) -> str:
+    # 未传入翻译时自动用术语表
+    _auto_translate = translated_tooltips is None
+    if translated_tooltips is None:
+        translated_tooltips = {}
     name = skill.get("name") or "?"
     size = SIZE_ZH.get(skill.get("size") or "", skill.get("size") or "?")
     starting = TIER_ICON.get(skill.get("startingTier") or "", skill.get("startingTier") or "?")
@@ -597,4 +631,158 @@ def format_daily_diff(username: str, data: dict) -> str:
     lines.append(f"  分数: {p24['rating']} → {cur_r} ({r_sign}{d_r})")
     lines.append(f"  排名: #{p24['position']} → #{cur_pos} ({p_arrow}{abs(d_p)})")
 
+    return "\n".join(lines)
+
+
+# ===== Boss / 怪物格式化 =====
+def format_monster(monster: dict) -> str:
+    """格式化 Boss/怪物信息"""
+    name = monster.get("name", "Unknown")
+    health = monster.get("health", 0)
+    level = monster.get("level", 0)
+    prestige = monster.get("prestige", 0)
+    items = monster.get("items", [])
+
+    lines = [f"🐉 {name}"]
+    lines.append(f"等级: {level} | 血量: {health} | 威望: {prestige}")
+    
+    if items:
+        lines.append(f"\n手牌 ({len(items)} 张):")
+        for i, item in enumerate(items, 1):
+            item_name_en = item.get("name", "?")
+            # 尝试翻译物品名
+            item_name_zh = translations.get_zh(item_name_en) or item_name_en
+            tier = TIER_ICON.get(item.get("tier", ""), item.get("tier", ""))
+            ench = item.get("enchantment")
+            ench_zh = ENCHANT_ZH.get(ench, ench) if ench else None
+            ench_str = f" [{ench_zh}]" if ench_zh else ""
+            lines.append(f"  {i}. {tier} {item_name_zh}{ench_str}")
+    else:
+        lines.append("\n手牌: 无")
+    
+    return "\n".join(lines)
+
+
+# ===== 附魔台格式化 =====
+def format_pedestal(pedestal: dict) -> str:
+    """格式化附魔台信息"""
+    name = pedestal.get("name", "Unknown")
+    internal_name = pedestal.get("internal_name", "")
+    tier = TIER_ICON.get(pedestal.get("tier", ""), pedestal.get("tier", ""))
+    heroes = [HERO_ZH.get(h, h) for h in pedestal.get("heroes", [])]
+    desc = pedestal.get("description", "")
+    
+    lines = [f"✨ {name} ({internal_name})"]
+    lines.append(f"品质: {tier} | 英雄: {', '.join(heroes) if heroes else '通用'}")
+    
+    if desc:
+        lines.append(f"\n效果:\n  {desc}")
+    
+    return "\n".join(lines)
+
+
+# ===== 战斗遭遇格式化 =====
+def format_combat(combat: dict, monster: dict | None = None) -> str:
+    """格式化战斗遭遇信息"""
+    name = combat.get("name", "Unknown")
+    internal_name = combat.get("internal_name", "")
+    tier = TIER_ICON.get(combat.get("tier", ""), combat.get("tier", ""))
+    level = combat.get("level", 0)
+    gold = combat.get("gold", 0)
+    xp = combat.get("xp", 0)
+    sandstorm = "是" if combat.get("sandstorm") else "否"
+    
+    lines = [f"⚔️ {name} ({internal_name})"]
+    lines.append(f"品质: {tier} | 等级: {level} | 沙尘暴: {sandstorm}")
+    lines.append(f"奖励: 💰 {gold} 金币, 📈 {xp} 经验")
+    
+    if monster:
+        lines.append(f"\n对手: {monster.get('name', '?')} (HP {monster.get('health', 0)})")
+    
+    return "\n".join(lines)
+
+
+# ===== BPP 数据格式化 =====
+def format_hero_rankings(rankings: list[dict]) -> str:
+    """格式化英雄强度排行榜"""
+    if not rankings:
+        return "❌ 暂无数据"
+    
+    date = rankings[0].get('date', '未知')
+    lines = [f"📊 英雄强度排行 ({date})", ""]
+    
+    for i, h in enumerate(rankings, 1):
+        total = h['total_runs']
+        perfect_rate = h['perfect'] / total if total > 0 else 0
+        gold_rate = h['gold'] / total if total > 0 else 0
+        
+        rank_emoji = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"{i}."
+        lines.append(f"{rank_emoji} {h['hero_zh']}")
+        lines.append(f"  10胜率: {h['ten_win_rate']:.1%} | 综合胜率: {h['win_rate']:.1%}")
+        lines.append(f"  平均天数: {h['avg_days']:.1f} | 完美: {perfect_rate:.1%} | 金奖: {gold_rate:.1%}")
+        lines.append(f"  总对局: {h['total_runs']:,}")
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
+def format_hero_detail(detail: dict) -> str:
+    """格式化英雄详细统计"""
+    if not detail:
+        return "❌ 未找到该英雄数据"
+    
+    from .bpp_client import HERO_ZH
+    name = detail['hero_zh']
+    date = detail['date']
+    total = detail['total_runs']
+    
+    lines = [f"🎯 {name} 详细统计 ({date})", ""]
+    
+    # 基础数据
+    lines.append("📈 综合数据")
+    lines.append(f"  10胜率: {detail['ten_win_rate']:.1%} ({detail['ten_win']}/{total})")
+    lines.append(f"  综合胜率: {detail['win_rate']:.1%}")
+    lines.append(f"  平均天数: {detail['avg_days']:.1f}")
+    lines.append(f"  性能评分: {detail['perf_rating']:.1f}")
+    lines.append(f"  总对局: {total:,}")
+    lines.append("")
+    
+    # 结局分布
+    outcomes = detail['outcomes']
+    lines.append("🏆 结局分布")
+    lines.append(f"  完美: {outcomes['perfect']} ({outcomes['perfect']/total:.1%})")
+    lines.append(f"  金奖: {outcomes['gold']} ({outcomes['gold']/total:.1%})")
+    lines.append(f"  银奖: {outcomes['silver']} ({outcomes['silver']/total:.1%})")
+    lines.append(f"  铜奖: {outcomes['bronze']} ({outcomes['bronze']/total:.1%})")
+    lines.append("")
+    
+    # 对阵胜率（前5）
+    matchups = detail.get('matchups', [])
+    if matchups:
+        lines.append("⚔️ 对阵胜率（前5）")
+        for m in matchups[:5]:
+            opp = m['opponent_hero']
+            opp_zh = HERO_ZH.get(opp, opp)
+            decided = m.get('decided', m.get('battles', 0))
+            wins = m.get('wins', 0)
+            losses = m.get('losses', 0)
+            wr = wins / decided if decided > 0 else 0
+            lines.append(f"  vs {opp_zh}: {wr:.1%} ({wins}-{losses})")
+        lines.append("")
+    
+    # 每日胜率走势（前7天）
+    battle_days = detail.get('battle_days', {})
+    if battle_days:
+        lines.append("📅 每日胜率走势")
+        for day_num in range(1, 8):
+            day_key = f"day_{day_num}"
+            bd = battle_days.get(day_key)
+            if not bd:
+                continue
+            decided = bd.get('decided', 0)
+            wins = bd.get('wins', 0)
+            losses = bd.get('losses', 0)
+            wr = wins / decided if decided > 0 else 0
+            lines.append(f"  Day{day_num}: {wr:.1%} ({wins}-{losses})")
+    
     return "\n".join(lines)

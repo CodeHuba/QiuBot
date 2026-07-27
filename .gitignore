@@ -20,3 +20,16 @@ plugins/bazaar_plugin/cache/
 # 编辑器
 .idea/
 .vscode/
+
+# 数据库
+data/*.db
+data/*.db.bak*
+
+# 备份文件
+*.bak
+*.bak.*
+
+# 数据文件
+data/LangChainAgentPlugin/
+data/bz_aliases.json
+data/card_id_mapping.json

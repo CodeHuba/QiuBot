@@ -125,11 +125,19 @@ class LangChainAgentPlugin(NcatBotPlugin):
         if not (is_private or is_at_bot):
             return
 
+        # 有图片或引用消息 → 让位给 chat_plugin 处理
+        if "[CQ:image," in raw or "[CQ:reply," in raw:
+            return
+
         # 清理 CQ 码
         text = CQ_ANY_RE.sub("", raw).strip()
 
-        # 空消息或传统指令跳过
-        if not text or text.startswith("#bz") or text.startswith("/bz"):
+        # 空消息、纯 @ 打招呼 → 让位给 chat_plugin
+        if not text:
+            return
+
+        # 传统指令跳过
+        if text.startswith("#bz") or text.startswith("/bz"):
             return
 
         print(f"[{self.name}] 收到消息: {text}")

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>巴扎阵容查询</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh}
+.navbar{background:#0d1221;border-bottom:1px solid #1f2937;padding:0 24px;position:sticky;top:0;z-index:100;display:flex;align-items:center;height:60px;gap:32px}
+.logo{font-size:18px;font-weight:700;color:#f59e0b;letter-spacing:.05em;white-space:nowrap}
+.nav-tabs{display:flex;gap:4px}
+.nav-tab{padding:8px 18px;border-radius:6px 6px 0 0;cursor:pointer;font-size:14px;font-weight:500;color:#9ca3af;border:none;background:transparent;transition:all .2s}
+.nav-tab:hover{color:#e2e8f0;background:#1f2937}
+.nav-tab.active{color:#f59e0b;background:#1f2937;border-bottom:2px solid #f59e0b}
+.main{max-width:900px;margin:0 auto;padding:32px 16px}
+.panel{display:none}.panel.active{display:block}
+.form-card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;margin-bottom:24px}
+.form-title{font-size:15px;font-weight:600;color:#f59e0b;margin-bottom:18px}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group label{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em}
+input,select{background:#0a0e1a;border:1px solid #374151;border-radius:8px;padding:9px 14px;color:#e2e8f0;font-size:14px;outline:none;transition:border-color .2s;min-width:140px}
+input:focus,select:focus{border-color:#f59e0b}
+input::placeholder{color:#4b5563}
+.btn{padding:9px 22px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:all .2s}
+.btn-primary{background:#f59e0b;color:#0a0e1a}
+.btn-primary:hover{background:#fbbf24}
+.btn-primary:disabled{background:#374151;color:#6b7280;cursor:not-allowed}
+.result-card{background:#111827;border:1px solid #1f2937;border-radius:12px;overflow:hidden;margin-bottom:24px}
+.result-header{padding:14px 20px;border-bottom:1px solid #1f2937;font-size:13px;color:#9ca3af;display:flex;justify-content:space-between;align-items:center}
+.total{color:#f59e0b;font-weight:600}
+.run-item{padding:13px 20px;border-bottom:1px solid #1a2235;display:flex;gap:12px;align-items:center;transition:background .15s}
+.run-item:hover{background:#1a2235}
+.run-item:last-child{border-bottom:none}
+.run-hero{padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;background:#1f2937;color:#a78bfa;border:1px solid #374151}
+.run-meta{flex:1;min-width:0}
+.run-title{font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:4px}
+.run-items{font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.win-badge{font-size:13px;font-weight:700;color:#10b981;white-space:nowrap}
+.run-link{font-size:12px;color:#3b82f6;text-decoration:none;white-space:nowrap}
+.run-link:hover{color:#60a5fa}
+.pagination{display:flex;gap:8px;justify-content:center;padding:16px;border-top:1px solid #1f2937;flex-wrap:wrap}
+.page-btn{padding:6px 14px;border-radius:6px;border:1px solid #374151;background:transparent;color:#9ca3af;cursor:pointer;font-size:13px;transition:all .2s}
+.page-btn:hover{border-color:#f59e0b;color:#f59e0b}
+.page-btn.active{background:#f59e0b;color:#0a0e1a;border-color:#f59e0b;font-weight:600}
+.page-btn:disabled{opacity:.3;cursor:not-allowed}
+.winrate-card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:32px;text-align:center;margin-bottom:24px}
+.winrate-title{font-size:15px;color:#9ca3af;margin-bottom:20px}
+.winrate-big{font-size:60px;font-weight:800;line-height:1;margin-bottom:8px}
+.winrate-bar-wrap{background:#1f2937;border-radius:99px;height:8px;width:260px;margin:16px auto;overflow:hidden}
+.winrate-bar{height:100%;border-radius:99px;transition:width .6s ease}
+.winrate-stats{display:flex;gap:40px;justify-content:center;margin-top:20px}
+.winrate-stat .num{font-size:24px;font-weight:700;color:#e2e8f0}
+.winrate-stat .lbl{font-size:12px;color:#6b7280;margin-top:3px}
+.partner-section-title{font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;padding:12px 20px 8px;border-bottom:1px solid #1f2937}
+.partner-item{display:flex;align-items:center;gap:14px;padding:13px 20px;border-bottom:1px solid #1a2235;transition:background .15s}
+.partner-item:hover{background:#1a2235}
+.partner-item:last-child{border-bottom:none}
+.partner-rank{font-size:20px;width:28px;text-align:center}
+.partner-name{flex:1;font-size:14px;font-weight:600;color:#e2e8f0}
+.partner-rate{font-size:15px;font-weight:700}
+.partner-sub{font-size:12px;color:#6b7280;margin-top:2px}
+.partner-bar-wrap{width:80px;background:#1f2937;border-radius:99px;height:6px;overflow:hidden}
+.partner-bar{height:100%;border-radius:99px;transition:width .5s ease}
+.error-msg{background:#1f1010;border:1px solid #7f1d1d;border-radius:10px;padding:14px 18px;color:#f87171;font-size:13px;margin-bottom:16px}
+.loading{text-align:center;padding:40px;color:#6b7280;font-size:14px}
+.empty{text-align:center;padding:40px;color:#6b7280;font-size:14px}
+.suggest-title{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.suggest-chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:5px 12px;border-radius:20px;font-size:13px;cursor:pointer;border:1px solid #374151;background:#111827;color:#9ca3af;transition:all .2s}
+.chip:hover{border-color:#f59e0b;color:#f59e0b;background:#1a1500}
+.chip .cnt{font-size:11px;color:#4b5563;margin-left:4px}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="logo">🎮 巴扎阵容库</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('runs')">阵容查询</button>
+    <button class="nav-tab" onclick="switchTab('winrate')">胜率查询</button>
+    <button class="nav-tab" onclick="switchTab('partner')">最佳搭档</button>
+  </div>
+</nav>
+<div class="main">
+<div id="suggest-area" style="margin-bottom:24px;display:none">
+  <div class="form-card" style="padding:18px 24px">
+    <div style="margin-bottom:14px">
+      <div class="suggest-title">🔥 热门英雄</div>
+      <div class="suggest-chips" id="suggest-heroes"></div>
+    </div>
+    <div>
+      <div class="suggest-title">🃏 热门卡牌</div>
+      <div class="suggest-chips" id="suggest-cards"></div>
+    </div>
+  </div>
+</div>
+<div id="panel-runs" class="panel active">
+  <div class="form-card">
+    <div class="form-title">🃏 阵容查询</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>英雄</label>
+        <select id="runs-hero">
+          <option value="">全部英雄</option>
+          <option value="凡妮莎">凡妮莎</option>
+          <option value="杜利">杜利</option>
+          <option value="马克">马克</option>
+          <option value="皮格">皮格</option>
+          <option value="斯黛拉">斯黛拉</option>
+          <option value="朱尔斯">朱尔斯</option>
+          <option value="卡诺克">卡诺克</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>卡牌（+分隔多张）</label>
+        <input id="runs-cards" type="text" placeholder="如：火炮阵列+赛博铁尺">
+      </div>
+      <div class="form-group">
+        <label>最低胜场</label>
+        <select id="runs-wins">
+          <option value="10">10胜</option>
+          <option value="9">9胜</option>
+          <option value="8">8胜</option>
+          <option value="7">7胜</option>
+          <option value="1">全部</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>天数</label>
+        <input id="runs-days" type="number" placeholder="不限" min="1" style="width:90px">
+      </div>
+      <button class="btn btn-primary" onclick="queryRuns(1)">查询</button>
+    </div>
+  </div>
+  <div id="runs-error"></div>
+  <div id="runs-result"></div>
+</div>
+<div id="panel-winrate" class="panel">
+  <div class="form-card">
+    <div class="form-title">📊 10胜率查询</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>卡牌（+分隔多张）</label>
+        <input id="wr-cards" type="text" placeholder="如：火炮阵列+深海弯刀" style="min-width:220px">
+      </div>
+      <div class="form-group">
+        <label>英雄（可选）</label>
+        <select id="wr-hero">
+          <option value="">不限</option>
+          <option value="凡妮莎">凡妮莎</option>
+          <option value="杜利">杜利</option>
+          <option value="马克">马克</option>
+          <option value="皮格">皮格</option>
+          <option value="斯黛拉">斯黛拉</option>
+          <option value="朱尔斯">朱尔斯</option>
+          <option value="卡诺克">卡诺克</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>天数</label>
+        <input id="wr-days" type="number" placeholder="不限" min="1" style="width:90px">
+      </div>
+      <button class="btn btn-primary" onclick="queryWinrate()">查询</button>
+    </div>
+  </div>
+  <div id="wr-error"></div>
+  <div id="wr-result"></div>
+</div>
+<div id="panel-partner" class="panel">
+  <div class="form-card">
+    <div class="form-title">🤝 最佳搭档查询</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>卡牌名称</label>
+        <input id="pt-card" type="text" placeholder="如：火炮阵列" style="min-width:200px">
+      </div>
+      <div class="form-group">
+        <label>天数</label>
+        <input id="pt-days" type="number" placeholder="不限" min="1" style="width:90px">
+      </div>
+      <button class="btn btn-primary" onclick="queryPartner()">查询</button>
+    </div>
+  </div>
+  <div id="pt-error"></div>
+  <div id="pt-result"></div>
+</div>
+</div>
+<script>
+const HEROES = {凡妮莎:'Vanessa',杜利:'Dooley',马克:'Mak',皮格:'Pygmalien',斯黛拉:'Stelle',朱尔斯:'Jules',卡诺克:'Karnok'};
+let lastQuery = 0;
+
+function switchTab(tab) {
+  document.querySelectorAll('.nav-tab').forEach((t,i)=>{
+    t.classList.toggle('active', ['runs','winrate','partner'][i]===tab);
+  });
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+tab).classList.add('active');
+}
+
+function checkRate() {
+  const now = Date.now();
+  if (now - lastQuery < 3000) {
+    const wait = ((3000-(now-lastQuery))/1000).toFixed(1);
+    return `请等待 ${wait} 秒后再查询`;
+  }
+  lastQuery = now;
+  return null;
+}
+
+function showError(id, msg) {
+  document.getElementById(id).innerHTML = msg ? `<div class="error-msg">${msg}</div>` : '';
+}
+
+function winrateColor(r) {
+  if (r >= 0.7) return '#10b981';
+  if (r >= 0.5) return '#f59e0b';
+  return '#ef4444';
+}
+
+async function queryRuns(page) {
+  const err = checkRate();
+  if (err) { showError('runs-error', err); return; }
+  showError('runs-error', '');
+  const hero = document.getElementById('runs-hero').value;
+  const cards = document.getElementById('runs-cards').value.trim();
+  const wins = document.getElementById('runs-wins').value;
+  const days = document.getElementById('runs-days').value;
+  document.getElementById('runs-result').innerHTML = '<div class="loading">查询中...</div>';
+  const params = new URLSearchParams({min_wins: wins, page});
+  if (hero) params.set('hero', hero);
+  if (cards) params.set('cards', cards);
+  if (days) params.set('days', days);
+  try {
+    const res = await fetch('/api/runs?' + params);
+    const data = await res.json();
+    if (data.error) { showError('runs-error', data.error); document.getElementById('runs-result').innerHTML=''; return; }
+    renderRuns(data, page, {hero, cards, wins, days});
+  } catch(e) { showError('runs-error', '请求失败: '+e.message); document.getElementById('runs-result').innerHTML=''; }
+}
+
+function renderRuns(data, page, params) {
+  const {runs, total, pages} = data;
+  if (!runs || runs.length === 0) {
+    document.getElementById('runs-result').innerHTML = '<div class="result-card"><div class="empty">未找到符合条件的阵容</div></div>';
+    return;
+  }
+  const heroZh = {Vanessa:'凡妮莎',Dooley:'杜利',Mak:'马克',Pygmalien:'皮格',Stelle:'斯黛拉',Jules:'朱尔斯',Karnok:'卡诺克'};
+  let items = runs.map(r => {
+    const day = r.wins + r.losses;
+    const itemsStr = r.items.slice(0,5).join('、') + (r.items.length>5?` +${r.items.length-5}`:'');
+    const screenshot = r.screenshot ? `<div style="margin:8px 0 2px"><img src="${r.screenshot}" style="max-width:100%;border-radius:6px;border:1px solid #1f2937" loading="lazy" onerror="this.style.display='none'"></div>` : '';
+    return `<div class="run-item" style="flex-direction:column;align-items:flex-start">
+      <div style="display:flex;gap:12px;align-items:center;width:100%">
+        <span class="run-hero">${heroZh[r.hero]||r.hero}</span>
+        <div class="run-meta">
+          <div class="run-title">Day${day} · ${r.username||'匿名'}</div>
+          <div class="run-items">${itemsStr}</div>
+        </div>
+        <span class="win-badge">${r.wins}胜${r.losses}负</span>
+        <a class="run-link" href="${r.url}" target="_blank">查看 →</a>
+      </div>
+      ${screenshot}
+    </div>`;
+  }).join('');
+
+  let pagination = '';
+  if (pages > 1) {
+    const btns = [];
+    for (let i = 1; i <= Math.min(pages, 10); i++) {
+      btns.push(`<button class="page-btn${i===page?' active':''}" onclick="queryRuns(${i})">${i}</button>`);
+    }
+    pagination = `<div class="pagination">${btns.join('')}</div>`;
+  }
+
+  document.getElementById('runs-result').innerHTML = `
+    <div class="result-card">
+      <div class="result-header">
+        <span>阵容列表</span>
+        <span class="total">共 ${total} 条结果（第 ${page}/${pages} 页）</span>
+      </div>
+      ${items}
+      ${pagination}
+    </div>`;
+}
+
+async function queryWinrate() {
+  const err = checkRate();
+  if (err) { showError('wr-error', err); return; }
+  showError('wr-error', '');
+  const cards = document.getElementById('wr-cards').value.trim();
+  const hero = document.getElementById('wr-hero').value;
+  const days = document.getElementById('wr-days').value;
+  if (!cards) { showError('wr-error', '请输入至少一张卡牌'); return; }
+  document.getElementById('wr-result').innerHTML = '<div class="loading">查询中...</div>';
+  const params = new URLSearchParams({cards});
+  if (hero) params.set('hero', hero);
+  if (days) params.set('days', days);
+  try {
+    const res = await fetch('/api/winrate?' + params);
+    const data = await res.json();
+    if (data.error) { showError('wr-error', data.error); document.getElementById('wr-result').innerHTML=''; return; }
+    renderWinrate(data);
+  } catch(e) { showError('wr-error', '请求失败: '+e.message); document.getElementById('wr-result').innerHTML=''; }
+}
+
+function renderWinrate(data) {
+  const {card_names, not_found, total, ten_win, rate} = data;
+  if (total === 0) {
+    document.getElementById('wr-result').innerHTML = '<div class="result-card"><div class="empty">暂无数据</div></div>';
+    return;
+  }
+  const color = winrateColor(rate);
+  const pct = (rate*100).toFixed(1);
+  const title = card_names.join(' + ') || '查询卡牌';
+  let notFoundHtml = not_found && not_found.length ? `<div style="color:#f87171;font-size:12px;margin-top:12px">未识别: ${not_found.join(', ')}</div>` : '';
+  document.getElementById('wr-result').innerHTML = `
+    <div class="winrate-card">
+      <div class="winrate-title">${title} 的10胜率</div>
+      <div class="winrate-big" style="color:${color}">${pct}%</div>
+      <div class="winrate-bar-wrap"><div class="winrate-bar" style="width:${pct}%;background:${color}"></div></div>
+      <div class="winrate-stats">
+        <div class="winrate-stat"><div class="num">${ten_win}</div><div class="lbl">10胜局数</div></div>
+        <div class="winrate-stat"><div class="num">${total}</div><div class="lbl">含该卡总局数</div></div>
+      </div>
+      ${notFoundHtml}
+    </div>`;
+}
+
+async function queryPartner() {
+  const err = checkRate();
+  if (err) { showError('pt-error', err); return; }
+  showError('pt-error', '');
+  const card = document.getElementById('pt-card').value.trim();
+  const days = document.getElementById('pt-days').value;
+  if (!card) { showError('pt-error', '请输入卡牌名称'); return; }
+  document.getElementById('pt-result').innerHTML = '<div class="loading">查询中...</div>';
+  const params = new URLSearchParams({card});
+  if (days) params.set('days', days);
+  try {
+    const res = await fetch('/api/partner?' + params);
+    const data = await res.json();
+    if (data.error) { showError('pt-error', data.error); document.getElementById('pt-result').innerHTML=''; return; }
+    renderPartner(data);
+  } catch(e) { showError('pt-error', '请求失败: '+e.message); document.getElementById('pt-result').innerHTML=''; }
+}
+
+function renderPartner(data) {
+  const {card_name, by_winrate, by_appear, target_total} = data;
+  if (!by_winrate.length && !by_appear.length) {
+    document.getElementById('pt-result').innerHTML = '<div class="result-card"><div class="empty">暂无满足条件的搭档数据（需至少50次共现）</div></div>';
+    return;
+  }
+  const medals = ['🥇','🥈','🥉'];
+
+  function renderList(items, rateKey, rateLabel, barColor) {
+    return items.map((p,i) => {
+      const rate = p[rateKey];
+      const pct = (rate*100).toFixed(1);
+      const sub = rateKey === 'rate'
+        ? `${p.ten_win}/${p.total} 局`
+        : `${p.total}/${target_total} 局`;
+      return `<div class="partner-item">
+        <span class="partner-rank">${medals[i]}</span>
+        <div style="flex:1">
+          <div class="partner-name">${p.name}</div>
+          <div class="partner-sub">${sub}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="partner-rate" style="color:${winrateColor(rate)}">${pct}%</div>
+          <div class="partner-sub">${rateLabel}</div>
+        </div>
+        <div class="partner-bar-wrap"><div class="partner-bar" style="width:${Math.min(pct,100)}%;background:${winrateColor(rate)}"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('pt-result').innerHTML = `
+    <div class="result-card">
+      <div class="result-header">
+        <span>${card_name} 最佳搭档</span>
+        <span class="total">含该卡共 ${target_total} 局</span>
+      </div>
+      <div class="partner-section-title">📈 胜率榜 TOP3</div>
+      ${renderList(by_winrate, 'rate', '10胜率', '#10b981')}
+      <div class="partner-section-title" style="margin-top:4px">🔗 组合率榜 TOP3</div>
+      ${renderList(by_appear, 'appear_rate', '组合率', '#3b82f6')}
+    </div>`;
+}
+
+// Enter 键触发查询
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const active = document.querySelector('.panel.active').id;
+  if (active === 'panel-runs') queryRuns(1);
+  else if (active === 'panel-winrate') queryWinrate();
+  else if (active === 'panel-partner') queryPartner();
+});
+
+function loadSuggestions() {
+  fetch('/api/suggestions')
+    .then(r => r.json())
+    .then(data => {
+      const heroes = data.heroes || [];
+      const cards = data.cards || [];
+      if (!heroes.length && !cards.length) return;
+      document.getElementById('suggest-area').style.display = 'block';
+      document.getElementById('suggest-heroes').innerHTML = heroes.map(h =>
+        `<span class="chip" onclick="applySuggestion('hero','${h.name}')">${h.name}<span class="cnt">${h.count}</span></span>`
+      ).join('');
+      document.getElementById('suggest-cards').innerHTML = cards.map(c =>
+        `<span class="chip" onclick="applySuggestion('card','${c.name}')">${c.name}<span class="cnt">${c.count}</span></span>`
+      ).join('');
+    }).catch(() => {});
+}
+
+function applySuggestion(type, val) {
+  const activeTab = document.querySelector('.nav-tab.active').textContent.trim();
+  const isRuns = activeTab.includes('阵容');
+  const isWinrate = activeTab.includes('胜率');
+  if (type === 'hero') {
+    const selId = isRuns ? 'runs-hero' : 'winrate-hero';
+    const sel = document.getElementById(selId);
+    if (sel) Array.from(sel.options).forEach(o => { if (o.text === val) sel.value = o.value; });
+  } else {
+    const inpId = isRuns ? 'runs-cards' : isWinrate ? 'winrate-cards' : 'partner-card';
+    const inp = document.getElementById(inpId);
+    if (inp) inp.value = val;
+  }
+}
+</script>
+</body>
+</html>

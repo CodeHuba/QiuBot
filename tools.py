@@ -87,21 +87,36 @@ def create_tools() -> List[BaseTool]:
                 from plugins.bazaar_plugin import formatter, matcher
                 
                 if item_type == "item":
-                    # 从 GameData.db 查询
                     item, candidates = matcher.find_one(item_name, game_client.items(), name_field="name")
-                    if not item:
-                        return f"未找到物品: {item_name}"
-                    # 使用 formatter 格式化输出
-                    return formatter.format_item(item)
+                    if item:
+                        return formatter.format_item(item)
+                    if candidates:
+                        from plugins.bazaar_plugin import translations as tr
+                        names = []
+                        for c in candidates[:5]:
+                            en = c.get("name", "")
+                            zh = tr.get_zh(en)
+                            names.append(f"{zh}（{en}）" if zh and zh != en else en)
+                        return f"AMBIGUOUS: 未能精准匹配「{item_name}」，找到以下候选，请向用户列出并让其确认：
+" + "
+".join(f"- {n}" for n in names)
+                    return f"NOT_FOUND: 数据库中未找到与「{item_name}」相关的物品，请告知用户并请其换个名称重试。"
                     
                 elif item_type == "skill":
-                    # 从 GameData.db 查询
                     skill, candidates = matcher.find_one(item_name, game_client.skills(), name_field="name")
-                    if not skill:
-                        return f"未找到技能: {item_name}"
-                    # 使用 formatter 格式化输出
-                    return formatter.format_skill(skill)
-                    
+                    if skill:
+                        return formatter.format_skill(skill)
+                    if candidates:
+                        from plugins.bazaar_plugin import translations as tr
+                        names = []
+                        for c in candidates[:5]:
+                            en = c.get("name", "")
+                            zh = tr.get_zh(en)
+                            names.append(f"{zh}（{en}）" if zh and zh != en else en)
+                        return f"AMBIGUOUS: 未能精准匹配「{item_name}」，找到以下候选，请向用户列出并让其确认：
+" + "
+".join(f"- {n}" for n in names)
+                    return f"NOT_FOUND: 数据库中未找到与「{item_name}」相关的技能，请告知用户并请其换个名称重试。"
                 else:
                     return f"不支持的类型: {item_type}，请使用 'item' 或 'skill'"
                     

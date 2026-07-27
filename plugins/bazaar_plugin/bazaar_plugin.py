@@ -1,3 +1,4 @@
+from . import bazaardb_client as bdb
 """
 大巴扎 (The Bazaar) QQ 群插件
 - bz me <用户名>      mrmao 玩家信息
@@ -210,6 +211,23 @@ class BazaarPlugin(NcatBotPlugin):
             if not ADMIN_QQ or str(user_id) != str(ADMIN_QQ):
                 return "[巴扎] 只有管理员能触发测试推送"
             return await self._cmd_testpush(event)
+
+        if sub in {"db", "数据库", "card", "卡牌"}:
+            if not arg:
+                return "用法: #bz db <卡牌名>  (支持中英文，查 bazaardb.gg 数据)"
+            return await self._cmd_db(arg)
+
+        if sub in {"runs", "阵容", "run"}:
+            return await self._cmd_runs(arg)
+
+        if sub in {"winrate", "胜率"}:
+            return await self._cmd_winrate(arg)
+
+        if sub in {"alias", "别名"}:
+            return await self._cmd_alias(arg)
+
+        if sub in {"partner", "搭档"}:
+            return await self._cmd_partner(arg)
 
         return f"未知子命令: {sub}\n\n" + fmt.format_help()
 
@@ -554,3 +572,372 @@ class BazaarPlugin(NcatBotPlugin):
             lines.append(block)
 
         return "\n".join(lines)
+
+    # ===== runs 查询 =====
+    async def _cmd_partner(self, arg: str) -> str:
+        from .runs_query import get_client
+        import re as _re
+
+        if not arg:
+            return (
+                "🤝 卡牌最佳搭档查询\n\n"
+                "用法: #bz partner <卡牌> [--days N]\n\n"
+                "示例:\n"
+                "  #bz partner 火炮阵列\n"
+                "  #bz partner 火炮阵列 --days 7"
+            )
+
+        try:
+            client = get_client()
+        except Exception as e:
+            return f"[巴扎] partner 初始化失败: {e}"
+
+        days = None
+        days_m = _re.search(r'--days\s+(\d+)', arg)
+        if days_m:
+            days = int(days_m.group(1))
+            arg = arg[:days_m.start()] + arg[days_m.end():]
+            arg = arg.strip()
+
+        card = arg.strip()
+        if not card:
+            return "[巴扎] 请指定卡牌名称"
+
+        result = client.partner(card=card, days=days)
+
+        if result["not_found"]:
+            return f"[巴扎] 找不到卡牌「{card}」，请确认名称"
+
+        card_name = result["card_name"]
+        by_winrate = result["by_winrate"]
+        by_appear = result["by_appear"]
+        target_total = result["target_total"]
+
+        title_parts = [card_name]
+        if days:
+            title_parts.append(f"近{days}天")
+
+        if not by_winrate and not by_appear:
+            return f"🤝 {card_name} 最佳搭档\n\n暂无满足条件的搭档数据（需至少50次共现）"
+
+        medals = ["🥇", "🥈", "🥉"]
+        lines = [f"🤝 {' | '.join(title_parts)}（含该卡共 {target_total} 局）", ""]
+
+        lines.append("📈 胜率榜 TOP3")
+        for i, p in enumerate(by_winrate):
+            lines.append(
+                f"{medals[i]} {p['name']}  "
+                f"10胜率 {p['rate']*100:.1f}%  ({p['ten_win']}/{p['total']} 局)"
+            )
+
+        lines.append("")
+        lines.append("🔗 组合率榜 TOP3")
+        for i, p in enumerate(by_appear):
+            lines.append(
+                f"{medals[i]} {p['name']}  "
+                f"组合率 {p['appear_rate']*100:.1f}%  ({p['total']}/{target_total} 局)"
+            )
+
+        lines.append("")
+        lines.append("💡 #bz partner <卡牌> [--days N]")
+        return "\n".join(lines)
+
+
+    async def _cmd_alias(self, arg: str) -> str:
+        import json as _json
+        from pathlib import Path as _Path
+        import sys as _sys
+
+        alias_file = _Path("/opt/qiubot/data/bz_aliases.json")
+
+        def _load():
+            if alias_file.exists():
+                try:
+                    return _json.loads(alias_file.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            return {"cards": {}, "heroes": {}}
+
+        def _save(data):
+            alias_file.write_text(_json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            mod = _sys.modules.get("plugins.bazaar_plugin.runs_query")
+            if mod and hasattr(mod, "_client"):
+                mod._client = None
+
+        arg = (arg or "").strip()
+
+        if not arg or arg == "list":
+            data = _load()
+            cards = data.get("cards", {})
+            heroes = data.get("heroes", {})
+            if not cards and not heroes:
+                return "暂无自定义别名\n\n用法:\n  #bz alias <别名> <卡牌名>\n  #bz alias hero <别名> <英雄名>\n  #bz alias del <别名>\n  #bz alias list"
+            lines = ["📋 自定义别名列表"]
+            if cards:
+                lines.append("\n🃏 卡牌别名：")
+                for a, r in sorted(cards.items()):
+                    lines.append(f"  {a} → {r}")
+            if heroes:
+                lines.append("\n🦸 英雄别名：")
+                for a, r in sorted(heroes.items()):
+                    lines.append(f"  {a} → {r}")
+            return "\n".join(lines)
+
+        parts = arg.split()
+
+        if parts[0] == "del":
+            if len(parts) < 2:
+                return "用法: #bz alias del <别名>"
+            target = parts[1]
+            data = _load()
+            removed = False
+            for kind in ("cards", "heroes"):
+                if target in data[kind]:
+                    del data[kind][target]
+                    removed = True
+            if removed:
+                _save(data)
+                return f"已删除别名「{target}」\n\n💡 用法：\n  #bz alias <别名> <卡牌名>\n  #bz alias hero <别名> <英雄名>\n  #bz alias del <别名>\n  #bz alias list"
+
+        if parts[0] == "hero":
+            if len(parts) < 3:
+                return "用法: #bz alias hero <别名> <英雄名>"
+            alias = parts[1]
+            real = " ".join(parts[2:])
+            from .runs_query import get_client, HERO_ZH_TO_EN
+            client = get_client()
+            resolved = client.resolve_hero(real)
+            if not resolved:
+                valid = "、".join(sorted(set(HERO_ZH_TO_EN.keys())))
+                return f"未识别的英雄「{real}」\n有效英雄名: {valid}"
+            data = _load()
+            data["heroes"][alias] = real
+            _save(data)
+            hero_map = {"Vanessa": "海盗", "Dooley": "工程师", "Mak": "法师",
+                        "Pygmalien": "猪", "Stelle": "机甲", "Jules": "吸血鬼", "Karnok": "兽人"}
+            return f"英雄别名已设置: {alias} → {real}（{hero_map.get(resolved, resolved)}）\n\n💡 用法：\n  #bz alias <别名> <卡牌名>\n  #bz alias hero <别名> <英雄名>\n  #bz alias del <别名>\n  #bz alias list"
+
+  #bz alias <别名> <卡牌名>
+  #bz alias hero <别名> <英雄名>
+  #bz alias del <别名>
+  #bz alias list" + "
+
+  #bz alias <别名> <卡牌名>
+  #bz alias hero <别名> <英雄名>
+  #bz alias del <别名>
+  #bz alias list"
+
+        if len(parts) < 2:
+            return "用法: #bz alias <别名> <卡牌名>"
+        alias = parts[0]
+        real = " ".join(parts[1:])
+        from .runs_query import get_client
+        client = get_client()
+        ids = client.find_card_ids(real)
+        if not ids:
+            return f"找不到卡牌「{real}」，请确认卡牌名称"
+        en_name = client.translate_name(real)
+        zh_name = client.get_zh_name(en_name)
+        display = zh_name if zh_name != en_name else real
+        data = _load()
+        data["cards"][alias] = real
+        _save(data)
+        return f"卡牌别名已设置: {alias} → {display}\n\n💡 用法：\n  #bz alias <别名> <卡牌名>\n  #bz alias hero <别名> <英雄名>\n  #bz alias del <别名>\n  #bz alias list"
+
+  #bz alias <别名> <卡牌名>
+  #bz alias hero <别名> <英雄名>
+  #bz alias del <别名>
+  #bz alias list" + "
+
+  #bz alias <别名> <卡牌名>
+  #bz alias hero <别名> <英雄名>
+  #bz alias del <别名>
+  #bz alias list"
+
+
+    async def _cmd_winrate(self, arg: str) -> str:
+        from .runs_query import get_client
+        import re as _re
+
+        if not arg:
+            return (
+                "📊 卡牌10胜率查询\n\n"
+                "用法: #bz winrate <卡牌> [+<卡牌2>] [英雄] [--days N]\n\n"
+                "示例:\n"
+                "  #bz winrate 火炮阵列\n"
+                "  #bz winrate 火炮阵列+赛博铁尺\n"
+                "  #bz winrate 火炮阵列 海盗\n"
+                "  #bz winrate 火炮阵列 --days 3"
+            )
+
+        try:
+            client = get_client()
+        except Exception as e:
+            return f"[巴扎] winrate 初始化失败: {e}"
+
+        days = None
+        days_m = _re.search(r'--days\s+(\d+)', arg)
+        if days_m:
+            days = int(days_m.group(1))
+            arg = arg[:days_m.start()] + arg[days_m.end():]
+            arg = arg.strip()
+
+        hero = None
+        cards = []
+        parts = arg.split()
+        for part in parts:
+            resolved = client.resolve_hero(part)
+            if resolved and not hero:
+                hero = resolved
+            else:
+                for card in part.split('+'):
+                    card = card.strip()
+                    if card:
+                        cards.append(card)
+
+        if not cards:
+            return "[巴扎] 请指定至少一张卡牌，例如: #bz winrate 火炮阵列"
+
+        result = client.winrate(cards=cards, hero=hero, days=days)
+
+        not_found = result.get('not_found', [])
+        if not_found and not result['total']:
+            return f"[巴扎] 找不到卡牌: {', '.join(not_found)}"
+
+        card_str = '+'.join(result['card_names']) if result['card_names'] else '+'.join(cards)
+        hero_map = {'Vanessa': '海盗', 'Dooley': '工程师', 'Mak': '法师',
+                    'Pygmalien': '猪', 'Stelle': '机甲', 'Jules': '吸血鬼', 'Karnok': '兽人'}
+        hero_zh = hero_map.get(hero, hero) if hero else None
+
+        title_parts = [card_str]
+        if hero_zh:
+            title_parts.append(hero_zh)
+        if days:
+            title_parts.append(f"近{days}天")
+
+        total = result['total']
+        ten_win = result['ten_win']
+        rate = result['rate']
+
+        if total == 0:
+            return f"📊 {' | '.join(title_parts)}\n\n数据库中暂无包含该卡牌的记录"
+
+        lines = [
+            f"📊 {' | '.join(title_parts)}",
+            "",
+            f"10胜率：{rate*100:.1f}%",
+            f"10胜局数：{ten_win}",
+            f"含该卡总局数：{total}",
+        ]
+        if not_found:
+            lines.append(f"⚠️ 未找到卡牌: {', '.join(not_found)}")
+
+        lines.append("")
+        lines.append("💡 #bz winrate <卡牌> [+卡牌2] [英雄] [--days N]")
+
+        return '\n'.join(lines)
+
+
+    async def _cmd_db(self, arg: str) -> str:
+        """查询 bazaardb.gg 卡牌数据（在线，支持中英文）"""
+        from . import bazaardb_client as bdb
+        import asyncio
+        loop = asyncio.get_event_loop()
+        try:
+            card = await loop.run_in_executor(None, bdb.query_card_by_name, arg)
+        except Exception as e:
+            return f"[巴扎] 查询失败: {e}"
+        if card is None:
+            results_item = await loop.run_in_executor(None, bdb.search_cards, arg, "item")
+            results_skill = await loop.run_in_executor(None, bdb.search_cards, arg, "skill")
+            results = (results_item or []) + (results_skill or [])
+            if not results:
+                return f"未找到「{arg}」，请检查卡牌名称"
+            if len(results) == 1:
+                card = results[0]
+            else:
+                names = "、".join(r.get("name","?") for r in results[:5])
+                return f"找到多个结果: {names}\n请用更精确的名字重试，如: #bz db 万剑之王"
+        return bdb.format_card(card)
+
+
+    async def _cmd_runs(self, arg: str) -> str:
+        from .runs_query import get_client
+        import re as _re
+
+        try:
+            client = get_client()
+        except Exception as e:
+            return f"[巴扎] runs 查询初始化失败: {e}"
+
+        raw_cmd = "#bz runs " + arg if arg else "#bz runs"
+
+        if not arg:
+            help_text = (
+                "📋 BazaarDB 阵容查询\n\n"
+                "用法: #bz runs [英雄] [卡牌+卡牌] [--days N] [-pN]\n\n"
+                "示例:\n"
+                "  #bz runs 海盗 — 查海盗阵容\n"
+                "  #bz runs 火炮阵列 — 查含火炮阵列的阵容\n"
+                "  #bz runs 海盗 赛博铁尺+火炮阵列 — 组合查询\n"
+                "  #bz runs 工程师 --days 3 — 近3天\n"
+                "  #bz runs 海盗 -p2 — 第2页\n"
+                "  #bz runs 海盗 --wins 7 — 查7胜以上（默认10胜）"
+            )
+            return help_text
+
+        # 解析 --days
+        days = None
+        days_m = _re.search(r'--days\s+(\d+)', arg)
+        if days_m:
+            days = int(days_m.group(1))
+            arg = arg[:days_m.start()] + arg[days_m.end():]
+            arg = arg.strip()
+
+        # 解析 -pN
+        page = 1
+        page_m = _re.search(r'-p(\d+)', arg)
+        if page_m:
+            page = int(page_m.group(1))
+            arg = arg[:page_m.start()] + arg[page_m.end():]
+            arg = arg.strip()
+
+        # 解析 --legend
+        # 解析 --wins（最低胜场，默认10）
+        min_wins = 10
+        wins_m = _re.search(r'--wins\s+(\d+)', arg)
+        if wins_m:
+            min_wins = int(wins_m.group(1))
+            arg = arg[:wins_m.start()] + arg[wins_m.end():]
+            arg = arg.strip()
+
+        # 解析英雄和卡牌
+        hero = None
+        cards = []
+
+        parts = arg.split()
+        for part in parts:
+            resolved = client.resolve_hero(part)
+            if resolved and not hero:
+                hero = resolved
+            else:
+                for card in part.split('+'):
+                    card = card.strip()
+                    if card:
+                        cards.append(card)
+
+        result = client.query(hero=hero, cards=cards or None, days=days, min_wins=min_wins, page=page)
+
+        desc_parts = []
+        if hero:
+            hero_zh = {'Vanessa': '海盗', 'Dooley': '工程师', 'Mak': '法师',
+                       'Pygmalien': '猪', 'Stelle': '机甲', 'Jules': '吸血鬼',
+                       'Karnok': '兽人'}.get(hero, hero)
+            desc_parts.append(hero_zh)
+        if cards:
+            desc_parts.append('+'.join(cards))
+        if days:
+            desc_parts.append(f"近{days}天")
+        query_desc = ' '.join(desc_parts)
+
+        return client.format_result(result, query_desc, raw_cmd)
