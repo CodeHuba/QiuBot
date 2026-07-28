@@ -15,6 +15,8 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, abort
 sys.path.insert(0, '/opt/qiubot')
 from plugins.bazaar_plugin.runs_query import RunsQuery
 
+INGEST_TOKEN = 'eb3ff2d2de6ae942723c332e05882a8cfea2df1adf7d5b78'
+
 app = Flask(__name__, static_folder='static')
 
 STATS_DB = '/opt/qiubot/data/query_stats.db'
@@ -224,6 +226,53 @@ def card_img(tex_name):
         abort(404)
     return send_file(img_path, mimetype='image/png')
 
+
+
+@app.route('/api/ingest', methods=['POST'])
+def api_ingest():
+    """采集脚本专用：批量写入 runs 数据"""
+    token = request.headers.get('X-Ingest-Token', '')
+    if token != INGEST_TOKEN:
+        return jsonify({'error': 'unauthorized'}), 401
+
+    data = request.get_json(silent=True)
+    if not data or not isinstance(data, list):
+        return jsonify({'error': 'body must be a JSON array'}), 400
+
+    db_path = '/opt/qiubot/data/bazaar_runs.db'
+    try:
+        conn = __import__('sqlite3').connect(db_path, check_same_thread=False)
+        new_count = 0
+        for run in data:
+            wins = run.get('statWins') or 0
+            if wins < 1:
+                continue
+            try:
+                conn.execute("""INSERT OR IGNORE INTO runs
+                    (id, hero, username, created_at, items_json, skills_json, combats_json,
+                     stat_wins, stat_losses, player_rating, player_rating_after,
+                     player_rank, player_rank_after, screenshot_url, raw_json, collected_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (run['id'], run.get('hero'), run.get('username'),
+                     run.get('createdAt'),
+                     __import__('json').dumps(run.get('items', []), ensure_ascii=False),
+                     __import__('json').dumps(run.get('skills', []), ensure_ascii=False),
+                     __import__('json').dumps(run.get('combats', []), ensure_ascii=False),
+                     run.get('statWins'), run.get('statLosses'),
+                     run.get('playerRating'), run.get('playerRatingAfter'),
+                     run.get('playerRank'), run.get('playerRankAfter'),
+                     run.get('screenshotUrl'),
+                     __import__('json').dumps(run, ensure_ascii=False),
+                     __import__('datetime').datetime.now().isoformat()))
+                new_count += conn.total_changes > 0 and 1 or 0
+            except Exception as e:
+                pass
+        conn.commit()
+        total = conn.execute('SELECT COUNT(*) FROM runs').fetchone()[0]
+        conn.close()
+        return jsonify({'ok': True, 'new': new_count, 'total': total})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/')
 def index():
