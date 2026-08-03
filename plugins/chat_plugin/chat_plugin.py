@@ -23,6 +23,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
+# ===== 功能开关 =====
+CHAT_ENABLED = False   # 设为 True 恢复 @对话功能
+
 # ===== 配置 =====
 API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com").rstrip("/")
@@ -132,7 +135,7 @@ class ChatPlugin(NcatBotPlugin):
 
         # 群聊：必须 @ 自己
         if not is_private:
-            self_id = str(self.bot_qq or getattr(event, "self_id", "") or "BOT_QQ_NUMBER")
+            self_id = str(self.bot_qq or getattr(event, "self_id", "") or "ADMIN_QQ_NUMBER")
             at_self = re.compile(CQ_AT_RE_TPL.format(qq=re.escape(self_id)))
             if not at_self.search(raw):
                 return None
@@ -186,6 +189,8 @@ class ChatPlugin(NcatBotPlugin):
 
     @on_message
     async def handle_at(self, event: BaseMessageEvent):
+        if not CHAT_ENABLED:
+            return
         if not API_KEY:
             return
 

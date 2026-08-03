@@ -93,7 +93,7 @@ class SummaryPlugin(NcatBotPlugin):
             self.bot_qq = getattr(event, "self_id", None)
 
         raw = event.raw_message or ""
-        self_id = str(self.bot_qq or getattr(event, "self_id", "") or "BOT_QQ_NUMBER")
+        self_id = str(self.bot_qq or getattr(event, "self_id", "") or "ADMIN_QQ_NUMBER")
         # 必须 @ 自己
         at_self = re.compile(rf"\[CQ:at,qq={re.escape(self_id)}[^\]]*\]")
         is_at_me = bool(at_self.search(raw))

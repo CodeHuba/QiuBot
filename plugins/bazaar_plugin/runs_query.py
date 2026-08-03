@@ -266,14 +266,12 @@ class RunsQuery:
             if screenshot_url:
                 lines.append(
                     f"{i}. [{hero_zh}] Day{day} {run['wins']}胜{run['losses']}负 | {player} | {time_str}\n"
-                    f"   {run['url']}\n"
                     f"[CQ:image,file={screenshot_url}]"
                 )
             else:
                 lines.append(
                     f"{i}. [{hero_zh}] Day{day} {run['wins']}胜{run['losses']}负 | {player} | {time_str}\n"
                     f"   {items_preview}\n"
-                    f"   {run['url']}"
                 )
 
         # 翻页提示

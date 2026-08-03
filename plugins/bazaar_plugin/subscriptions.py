@@ -3,7 +3,7 @@
 格式:
 {
   "group:123456": ["user1", "user2"],
-  "private:ADMIN_QQ_NUMBER": ["user3"]
+  "private:BOT_QQ_NUMBER": ["user3"]
 }
 """
 import json

@@ -4,5 +4,9 @@ from ncatbot.core import BotClient
 bot = BotClient()
 
 # 以前台模式运行（插件模式）
-# 运行后会自动加载 plugins 目录下的所有插件
-bot.run_frontend()
+# 连接到 localhost:3002（通过 SSH 隧道连接到本地 SnowLuma）
+bot.run_frontend(
+    ws_uri="ws://localhost:3002",
+    ws_token="YOUR_WS_TOKEN",
+    remote_mode=True
+)

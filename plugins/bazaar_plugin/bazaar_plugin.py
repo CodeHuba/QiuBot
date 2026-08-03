@@ -71,6 +71,24 @@ class BazaarPlugin(NcatBotPlugin):
             name="bazaar_daily_watch",
             interval="10:00",  # 每天 10:00
         )
+        # 精简模式群组
+        self._compact_path = PROJECT_ROOT / 'data' / 'bz_compact_groups.json'
+        self._compact_groups: set = set()
+        if self._compact_path.exists():
+            import json as _j2
+            try:
+                self._compact_groups = set(str(x) for x in _j2.loads(self._compact_path.read_text(encoding='utf-8')).get('groups', []))
+            except Exception:
+                pass
+        # 指令开关
+        self._cmd_switch_path = PROJECT_ROOT / 'data' / 'bz_cmd_switch.json'
+        self._disabled_cmds: set = set()
+        if self._cmd_switch_path.exists():
+            import json as _j
+            try:
+                self._disabled_cmds = set(_j.loads(self._cmd_switch_path.read_text(encoding='utf-8')).get('disabled', []))
+            except Exception:
+                pass
         print(f"[{self.name}] 已加载 v{self.version}, 每日 10:00 推送已启用")
 
     async def _init_data(self):
@@ -139,6 +157,58 @@ class BazaarPlugin(NcatBotPlugin):
 
     # ===== 子命令分发 =====
     async def _dispatch(self, sub: str, arg: str, event: BaseMessageEvent) -> str:
+        # === 管理员指令开关 ===
+        if sub == "admin":
+            user_id = getattr(event, "user_id", 0)
+            if not ADMIN_QQ or str(user_id) != str(ADMIN_QQ):
+                return "[巴扎] 只有管理员能使用 admin 指令"
+            import json as _j
+            parts2 = arg.split()
+            action = parts2[0] if parts2 else "status"
+            if action == "status":
+                if self._disabled_cmds:
+                    lines = ["🔒 已禁用的指令:"]
+                    for c in sorted(self._disabled_cmds):
+                        lines.append(f"  · {c}")
+                else:
+                    lines = ["✅ 所有指令均已启用"]
+                return chr(10).join(lines)
+            if action == "disable" and len(parts2) >= 2:
+                cmd = parts2[1].lower()
+                self._disabled_cmds.add(cmd)
+                self._cmd_switch_path.write_text(
+                    _j.dumps({"disabled": list(self._disabled_cmds)}, ensure_ascii=False),
+                    encoding="utf-8")
+                return f"🔒 已禁用指令: {cmd}"
+            if action == "enable" and len(parts2) >= 2:
+                cmd = parts2[1].lower()
+                self._disabled_cmds.discard(cmd)
+                self._cmd_switch_path.write_text(
+                    _j.dumps({"disabled": list(self._disabled_cmds)}, ensure_ascii=False),
+                    encoding="utf-8")
+                return f"✅ 已启用指令: {cmd}"
+            if action == "compact":
+                import json as _jc
+                if len(parts2) < 2:
+                    return "用法:\n  #bz admin compact <群号>\n  #bz admin compact <群号> off\n  #bz admin compact list"
+                if parts2[1] == "list":
+                    if self._compact_groups:
+                        return "📋 精简模式群组:\n" + chr(10).join(f"  · {g}" for g in sorted(self._compact_groups))
+                    return "📋 暂无群组开启精简模式"
+                gid = str(parts2[1])
+                if len(parts2) >= 3 and parts2[2] == "off":
+                    self._compact_groups.discard(gid)
+                    self._compact_path.write_text(_jc.dumps({"groups": list(self._compact_groups)}, ensure_ascii=False), encoding="utf-8")
+                    return f"✅ 群 {gid} 已关闭精简模式"
+                self._compact_groups.add(gid)
+                self._compact_path.write_text(_jc.dumps({"groups": list(self._compact_groups)}, ensure_ascii=False), encoding="utf-8")
+                return f"✅ 群 {gid} 已开启精简模式"
+            return "用法:\n  #bz admin status\n  #bz admin disable <指令>\n  #bz admin enable <指令>\n  #bz admin compact <群号> [off]\n  #bz admin compact list"
+
+        # === 指令开关检查 ===
+        if sub in self._disabled_cmds:
+            return f"[巴扎] 指令 {sub} 当前已关闭"
+
         if sub in {"help", "帮助", "?"}:
             return fmt.format_help()
 
@@ -221,13 +291,13 @@ class BazaarPlugin(NcatBotPlugin):
             return await self._cmd_runs(arg)
 
         if sub in {"winrate", "胜率"}:
-            return await self._cmd_winrate(arg)
+            return await self._cmd_winrate(arg, event)
 
         if sub in {"alias", "别名"}:
             return await self._cmd_alias(arg)
 
         if sub in {"partner", "搭档"}:
-            return await self._cmd_partner(arg)
+            return await self._cmd_partner(arg, event)
 
         return f"未知子命令: {sub}\n\n" + fmt.format_help()
 
@@ -574,7 +644,7 @@ class BazaarPlugin(NcatBotPlugin):
         return "\n".join(lines)
 
     # ===== runs 查询 =====
-    async def _cmd_partner(self, arg: str) -> str:
+    async def _cmd_partner(self, arg: str, event=None) -> str:
         from .runs_query import get_client
         import re as _re
 
@@ -619,6 +689,13 @@ class BazaarPlugin(NcatBotPlugin):
 
         if not by_winrate and not by_appear:
             return f"🤝 {card_name} 最佳搭档\n\n暂无满足条件的搭档数据（需至少50次共现）"
+
+        # 精简模式
+        group_id = str(getattr(event, "group_id", 0) or 0)
+        if group_id in self._compact_groups:
+            wr_names = " > ".join(p["name"] for p in by_winrate)
+            ap_names = " > ".join(p["name"] for p in by_appear)
+            return f"胜率榜: {wr_names}\n组合榜: {ap_names}"
 
         medals = ["🥇", "🥈", "🥉"]
         lines = [f"🤝 {' | '.join(title_parts)}（含该卡共 {target_total} 局）", ""]
@@ -755,7 +832,7 @@ class BazaarPlugin(NcatBotPlugin):
   #bz alias list"
 
 
-    async def _cmd_winrate(self, arg: str) -> str:
+    async def _cmd_winrate(self, arg: str, event=None) -> str:
         from .runs_query import get_client
         import re as _re
 
@@ -821,6 +898,11 @@ class BazaarPlugin(NcatBotPlugin):
 
         if total == 0:
             return f"📊 {' | '.join(title_parts)}\n\n数据库中暂无包含该卡牌的记录"
+
+        # 精简模式
+        group_id = str(getattr(event, "group_id", 0) or 0)
+        if group_id in self._compact_groups:
+            return f"{card_str}: {total}局/{rate*100:.1f}%"
 
         lines = [
             f"📊 {' | '.join(title_parts)}",

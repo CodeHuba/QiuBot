@@ -131,20 +131,35 @@ def search_cards(query: str, kind: str = "item") -> list[dict]:
     return result
 
 
+def _register_community_translation(card: dict):
+    """从 card 注册社区翻译（bazaardb 返回的中文名）"""
+    try:
+        from . import translations as _trans
+        en = card.get("_originalTitleText", "")
+        zh = (card.get("Title") or {}).get("Text", "")
+        if en and zh and _trans.has_chinese(zh):
+            _trans.register_community(en, zh)
+    except Exception:
+        pass
+
+
 def get_card(url_id: str) -> Optional[dict]:
     """按 urlId 获取卡牌完整数据，磁盘缓存1天。"""
     key = f"card_{url_id}"
     cached = _mem_get(key, CARD_CACHE_TTL)
     if cached is not None:
+        _register_community_translation(cached)
         return cached
     cached = _disk_get(key, CARD_CACHE_TTL)
     if cached is not None:
         _mem_set(key, cached)
+        _register_community_translation(cached)
         return cached
     data = _sync_get(f"/api/card/{url_id}")
     if isinstance(data, dict) and "Id" in data:
         _mem_set(key, data)
         _disk_set(key, data)
+        _register_community_translation(data)
         return data
     return None
 
@@ -205,76 +220,122 @@ def query_card_by_name(name: str) -> Optional[dict]:
     return None
 
 
+
+
+
+def _resolve_tooltip_text(tooltips: list, replacements: dict, tier_name: str) -> list:
+    """解析一组 tooltip，替换占位符，过滤隐藏类型，返回文字列表。"""
+    HIDDEN_TYPES = {"bzdbgg.HiddenSearchable"}
+    result = []
+    for tip in tooltips:
+        if tip.get("TooltipType") in HIDDEN_TYPES:
+            continue
+        content = tip.get("Content", {}).get("Text", "") or ""
+        if not content:
+            continue
+        for placeholder, tier_vals in replacements.items():
+            if isinstance(tier_vals, dict):
+                val = tier_vals.get(tier_name) or tier_vals.get("Fixed")
+            else:
+                val = tier_vals
+            if val is not None:
+                content = content.replace(placeholder, str(val))
+        result.append(content)
+    return result
+
+
 def format_card_brief(card: dict, zh_name: str = "") -> str:
-    """
-    把 card dict 格式化为 QQ 消息文本（精简版）。
-    """
+    """把 card dict 格式化为 QQ 消息文本。"""
     from . import translations as trans
 
-    title_en = card.get("Title", {}).get("Text", "") or ""
-    title_zh = zh_name or trans.get_zh(title_en) or title_en
-    card_type = card.get("Type", "")
-    size = card.get("Size", "")
-    heroes = ", ".join(card.get("Heroes", [])) or "通用"
-    base_tier = card.get("BaseTier", "")
-    tags = card.get("DisplayTags", [])
-    tags_str = " ".join(f"#{t}" for t in tags) if tags else ""
+    TIER_ZH = {"Bronze": "铜", "Silver": "银", "Gold": "金", "Diamond": "钻", "Legendary": "传说"}
+    HERO_ZH = {"Common": "通用", "Vanessa": "海盗", "Dooley": "工程师",
+               "Mak": "法师", "Pygmalien": "猪", "Stelle": "机甲",
+               "Jules": "吸血鬼", "Karnok": "兽人"}
+    TAG_ZH  = {"Weapon": "武器", "Relic": "遗物", "Tool": "工具", "Aquatic": "水系",
+               "Food": "食物", "Property": "房产", "Friend": "同伴", "Vehicle": "载具",
+               "Damage": "伤害", "Shield": "护盾", "Heal": "治疗", "Poison": "毒",
+               "Burn": "灼烧", "Slow": "减速", "Freeze": "冻结", "Haste": "加速"}
+    ENC_ZH  = {"Golden": "黄金", "Heavy": "沉重", "Icy": "寒冰", "Turbo": "疾速",
+               "Shielded": "护盾", "Restorative": "回复", "Toxic": "毒素",
+               "Fiery": "炽焰", "Shiny": "闪亮", "Obsidian": "黑曜石", "Deadly": "致命",
+               "Radiant": "辉耀", "Mossy": "长青"}
 
-    lines = []
+    title_raw = card.get("Title", {}).get("Text", "") or ""
+    title_en  = card.get("_originalTitleText") or ""
+    if title_en:
+        title_zh = zh_name or trans.get_zh(title_en) or title_raw or title_en
+    else:
+        title_zh = zh_name or trans.get_zh(title_raw) or title_raw
+        title_en = title_raw
+
+    card_type = card.get("Type", "")
+    size      = card.get("Size", "")
+    heroes    = "\u3001".join(HERO_ZH.get(h, h) for h in card.get("Heroes", [])) or "通用"
+    base_tier = card.get("BaseTier", "")
+    tags      = card.get("DisplayTags", [])
+
+    out = []
     type_label = {"Item": "物品", "Skill": "技能"}.get(card_type, card_type)
     size_label = {"Small": "小", "Medium": "中", "Large": "大", "Small Large": "小/大"}.get(size, size)
-    lines.append(f"📦 {title_zh}（{title_en}）")
-    lines.append(f"类型: {type_label}  尺寸: {size_label}  起始Tier: {base_tier}  英雄: {heroes}")
-    if tags_str:
-        lines.append(f"标签: {tags_str}")
 
-    # Tooltip（按 tier 展示）
-    tiers_data = card.get("Tiers", {})
-    tooltips = card.get("Tooltips", [])
+    header = f"\U0001f4e6 {title_zh}"
+    if title_en and title_en != title_zh:
+        header += f"（{title_en}）"
+    out.append(header)
+
+    attrs   = card.get("BaseAttributes", {})
+    cd_ms   = attrs.get("CooldownMax")
+    cd_s    = f"  冷却:{cd_ms // 1000}s" if cd_ms else ""
+    multi   = attrs.get("Multicast")
+    multi_s = f"  多重x{multi}" if multi and multi > 1 else ""
+    dmg     = attrs.get("DamageAmount")
+    dmg_s   = f"  伤害:{dmg}" if dmg else ""
+    hp      = attrs.get("ShieldAmount") or attrs.get("HealAmount")
+    hp_s    = f"  护盾/回复:{hp}" if hp else ""
+    buy     = attrs.get("BuyPrice")
+    sell    = attrs.get("SellPrice")
+    price_s = f"  价格:买{buy}/卖{sell}金" if (buy or sell) else ""
+    out.append(f"类型:{type_label}  尺寸:{size_label}  品质:{TIER_ZH.get(base_tier, base_tier)}  英雄:{heroes}{cd_s}{multi_s}{dmg_s}{hp_s}{price_s}")
+    if tags:
+        out.append("标签: " + " ".join(TAG_ZH.get(t, t) for t in tags))
+
+    tiers_data   = card.get("Tiers", {})
+    tooltips     = card.get("Tooltips", [])
     replacements = card.get("TooltipReplacements", {})
+    tier_order   = [t for t in ("Bronze", "Silver", "Gold", "Diamond", "Legendary") if t in tiers_data]
 
-    if tooltips:
-        lines.append("─")
-        for tier_name in ("Bronze", "Silver", "Gold", "Diamond"):
-            if tier_name not in tiers_data:
-                continue
-            tier_lines = []
-            for tip in tooltips:
-                content = tip.get("Content", {}).get("Text", "") or ""
-                if not content:
-                    continue
-                # 替换占位符
-                for placeholder, tier_vals in replacements.items():
-                    if isinstance(tier_vals, dict):
-                        val = tier_vals.get(tier_name) or tier_vals.get("Fixed")
-                    else:
-                        val = tier_vals
-                    if val is not None:
-                        content = content.replace(placeholder, str(val))
-                tier_lines.append(content)
-            if tier_lines:
-                tier_zh = {"Bronze": "铜", "Silver": "银", "Gold": "金", "Diamond": "钻"}.get(tier_name, tier_name)
-                lines.append(f"[{tier_zh}] " + " / ".join(tier_lines))
+    if tooltips and tier_order:
+        tier_blocks = []
+        for tn in tier_order:
+            tl = _resolve_tooltip_text(tooltips, replacements, tn)
+            if tl:
+                tier_blocks.append((tn, tl))
+        if tier_blocks:
+            out.append("\u2500")
+            for tn, tl in tier_blocks:
+                out.append(f"[{TIER_ZH.get(tn, tn)}] " + " / ".join(tl))
+    elif tooltips:
+        tl = _resolve_tooltip_text(tooltips, replacements, "")
+        if tl:
+            out.append("\u2500")
+            out.append(" / ".join(tl))
 
-    # 价格
-    attrs = card.get("BaseAttributes", {})
-    buy = attrs.get("BuyPrice")
-    sell = attrs.get("SellPrice")
-    if buy or sell:
-        lines.append(f"价格: 买{buy}金 / 卖{sell}金")
-
-    # 附魔列表
     enchants = card.get("Enchantments", {})
     if enchants:
-        enc_names = list(enchants.keys())
-        lines.append(f"附魔: {', '.join(enc_names)}")
+        out.append("\u2500")
+        out.append("附魔效果:")
+        for enc_key, enc_data in enchants.items():
+            enc_name = ENC_ZH.get(enc_key, enc_key)
+            etips = enc_data.get("Localization", {}).get("Tooltips", [])
+            ereps = enc_data.get("TooltipReplacements", {})
+            el = _resolve_tooltip_text(etips, ereps, "Fixed")
+            if el:
+                out.append(f"  [{enc_name}] " + "；".join(el))
+            else:
+                out.append(f"  [{enc_name}]")
 
-    # bazaardb 链接
-    uri = card.get("Uri", "")
-    if uri:
-        lines.append(f"🔗 {BASE}{uri}")
+    return "\n".join(out)
 
-    return "\n".join(lines)
 
-# 别名，供插件调用
 format_card = format_card_brief
