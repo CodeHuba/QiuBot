@@ -2,6 +2,18 @@
 
 基于 [NcatBot](https://docs.ncatbot.xyz/) 开发的 QQ 群机器人，专为 The Bazaar 中文社区设计。
 
+## 截图预览
+
+| 物品查询 | 胜率统计 |
+|---------|---------|
+| ![物品查询](docs/screenshots/item-query.jpg) | ![胜率统计](docs/screenshots/winrate.jpg) |
+
+**Web 查询页面**
+
+![Web UI](docs/screenshots/web-ui.jpg)
+
+---
+
 ## 功能概览
 
 ### 🎮 The Bazaar 插件（`#bz`）
