@@ -17,7 +17,8 @@
     },
     "role_users": {
         "user": [
-            "ADMIN_QQ_NUMBER"
+            "ADMIN_QQ_NUMBER",
+            "BOT_QQ_NUMBER"
         ],
         "admin": [],
         "root": [
@@ -31,6 +32,13 @@
             "role_list": [
                 "user",
                 "root"
+            ]
+        },
+        "BOT_QQ_NUMBER": {
+            "white_permissions_list": [],
+            "black_permissions_list": [],
+            "role_list": [
+                "user"
             ]
         }
     },
