@@ -1,0 +1,25 @@
+root: 'your_qq_number'
+bt_uin: 'your_bot_qq_number'
+enable_webui_interaction: true
+debug: false
+github_proxy: null
+check_ncatbot_update: true
+skip_ncatbot_install_check: true
+websocket_timeout: 15
+napcat:
+  ws_uri: ws://localhost:3001
+  ws_token: <your_ws_token>
+  ws_listen_ip: localhost
+  webui_uri: http://localhost:6099
+  webui_token: <your_webui_token>
+  enable_webui: false
+  check_napcat_update: false
+  stop_napcat: false
+  remote_mode: true
+  report_self_message: false
+  report_forward_message_detail: true
+plugin:
+  plugins_dir: plugins
+  plugin_whitelist: []
+  plugin_blacklist: []
+  skip_plugin_load: false
