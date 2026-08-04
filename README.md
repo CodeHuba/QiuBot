@@ -6,11 +6,11 @@
 
 | 物品查询 | 胜率统计 |
 |---------|---------|
-| ![物品查询](docs/screenshots/item-query.jpg) | ![胜率统计](docs/screenshots/winrate.jpg) |
+| ![物品查询](docs/screenshots/item-query.jpg) | ![胜率统计](docs/screenshots/web-ui.jpg) |
 
 **Web 查询页面**
 
-![Web UI](docs/screenshots/web-ui.jpg)
+![Web UI](docs/screenshots/winrate.jpg)
 
 ---
 
