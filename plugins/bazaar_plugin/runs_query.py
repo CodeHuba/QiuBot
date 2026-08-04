@@ -8,6 +8,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from pathlib import Path
+from . import translations as _trans
 
 
 ALIAS_FILE = "/opt/qiubot/data/bz_aliases.json"
@@ -86,6 +87,13 @@ class RunsQuery:
         for zh, en in self.zh_to_en.items():
             if name in zh or zh in name:
                 return en
+        # fallback：社区翻译
+        comm = _trans.get_en(name)
+        if comm:
+            return comm
+        results = _trans.search_zh(name, limit=1)
+        if results:
+            return results[0]
         return name
 
     def get_zh_name(self, en_name: str) -> str:
