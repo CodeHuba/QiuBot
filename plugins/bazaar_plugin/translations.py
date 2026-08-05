@@ -6,8 +6,9 @@
 import json
 from pathlib import Path
 
-CACHE_DIR       = Path(__file__).parent / "cache"
-TRANS_COMM_FILE = CACHE_DIR / "translations_community.json"
+CACHE_DIR        = Path(__file__).parent / "cache"
+TRANS_COMM_FILE  = CACHE_DIR / "translations_community.json"
+TRANS_OFFIC_FILE = CACHE_DIR / "translations.json"  # 官方翻译（英文名 -> 中文名）
 
 _comm_en_to_zh: dict[str, str] = {}
 _comm_zh_to_en: dict[str, str] = {}
@@ -15,12 +16,22 @@ _comm_zh_to_en: dict[str, str] = {}
 
 def _load():
     global _comm_en_to_zh, _comm_zh_to_en
+    # 1. 先加载官方翻译作为底层（社区翻译优先级更高，后面会覆盖）
+    if TRANS_OFFIC_FILE.exists():
+        try:
+            data = json.loads(TRANS_OFFIC_FILE.read_text(encoding="utf-8"))
+            _comm_en_to_zh.update(data)
+            _comm_zh_to_en.update({zh: en for en, zh in data.items()})
+            print(f"[translations] 官方翻译: {len(data)} 条")
+        except Exception as e:
+            print(f"[translations] 官方翻译加载失败: {e}")
+    # 2. 社区翻译覆盖（优先级更高）
     if TRANS_COMM_FILE.exists():
         try:
             data = json.loads(TRANS_COMM_FILE.read_text(encoding="utf-8"))
-            _comm_en_to_zh = data
-            _comm_zh_to_en = {zh: en for en, zh in data.items()}
-            print(f"[translations] 社区翻译: {len(_comm_en_to_zh)} 条")
+            _comm_en_to_zh.update(data)
+            _comm_zh_to_en.update({zh: en for en, zh in data.items()})
+            print(f"[translations] 社区翻译: {len(data)} 条")
         except Exception as e:
             print(f"[translations] 社区翻译加载失败: {e}")
 
