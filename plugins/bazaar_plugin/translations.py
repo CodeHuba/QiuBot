@@ -13,10 +13,11 @@ TRANS_OFFIC_FILE = CACHE_DIR / "translations.json"  # 官方翻译（英文名 -
 _comm_en_to_zh: dict[str, str] = {}
 _comm_zh_to_en: dict[str, str] = {}
 _hash_to_zh: dict[str, str] = {}  # hash -> 中文（从 zh-CN.bytes 加载）
+_tooltip_en_to_zh: dict[str, str] = {}  # 英文 tooltip 描述 -> 中文描述
 
 
 def _load():
-    global _comm_en_to_zh, _comm_zh_to_en, _hash_to_zh
+    global _comm_en_to_zh, _comm_zh_to_en, _hash_to_zh, _tooltip_en_to_zh
     # 1. 先加载官方翻译作为底层（社区翻译优先级更高，后面会覆盖）
     if TRANS_OFFIC_FILE.exists():
         try:
@@ -149,3 +150,10 @@ def get_zh_by_key(key: str) -> str | None:
     if not key:
         return None
     return _hash_to_zh.get(key)
+
+
+def get_tooltip_zh(text_en: str) -> str | None:
+    """通过英文 tooltip 文本查中文翻译"""
+    if not text_en:
+        return None
+    return _tooltip_en_to_zh.get(text_en)

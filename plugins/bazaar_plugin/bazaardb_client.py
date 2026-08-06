@@ -232,12 +232,11 @@ def _resolve_tooltip_text(tooltips: list, replacements: dict, tier_name: str) ->
         if tip.get("TooltipType") in HIDDEN_TYPES:
             continue
         content_obj = tip.get("Content", {})
-        # 优先用 Key 查翻译，没有再用 Text
-        key = content_obj.get("Key", "")
-        text = content_obj.get("Text", "")
-        content = trans.get_zh_by_key(key) if key else ""
-        if not content:
-            content = text or ""
+        text = content_obj.get("Text", "") or ""
+        if not text:
+            continue
+        # bazaardb 返回的 Content 没有 Key，用 tooltip_en_to_zh 映射查中文
+        content = trans.get_tooltip_zh(text) or text
         if not content:
             continue
         for placeholder, tier_vals in replacements.items():
