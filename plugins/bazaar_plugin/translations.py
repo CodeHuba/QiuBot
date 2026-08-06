@@ -12,10 +12,11 @@ TRANS_OFFIC_FILE = CACHE_DIR / "translations.json"  # 官方翻译（英文名 -
 
 _comm_en_to_zh: dict[str, str] = {}
 _comm_zh_to_en: dict[str, str] = {}
+_hash_to_zh: dict[str, str] = {}  # hash -> 中文（从 zh-CN.bytes 加载）
 
 
 def _load():
-    global _comm_en_to_zh, _comm_zh_to_en
+    global _comm_en_to_zh, _comm_zh_to_en, _hash_to_zh
     # 1. 先加载官方翻译作为底层（社区翻译优先级更高，后面会覆盖）
     if TRANS_OFFIC_FILE.exists():
         try:
@@ -34,6 +35,29 @@ def _load():
             print(f"[translations] 社区翻译: {len(data)} 条")
         except Exception as e:
             print(f"[translations] 社区翻译加载失败: {e}")
+    # 3. 加载 hash -> 中文映射（用于 tooltip Key 查翻译）
+    zh_bytes_file = CACHE_DIR.parent.parent / "AppData/LocalLow/Tempo Storm/The Bazaar/prod/cache/translations/zh-CN.bytes"
+    if not zh_bytes_file.exists():
+        # Windows 游戏目录不在 WSL，用云服务器备份的 JSON
+        zh_json_file = CACHE_DIR / "zh-CN.json"
+        if zh_json_file.exists():
+            try:
+                import json as _j
+                data = _j.loads(zh_json_file.read_text(encoding="utf-8"))
+                _hash_to_zh.update(data)
+                print(f"[translations] hash映射: {len(data)} 条 (从 JSON)")
+            except Exception as e:
+                print(f"[translations] hash映射加载失败: {e}")
+    else:
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(zh_bytes_file))
+            for row in conn.execute("SELECT hash, text FROM translation").fetchall():
+                _hash_to_zh[row[0]] = row[1]
+            conn.close()
+            print(f"[translations] hash映射: {len(_hash_to_zh)} 条 (从 zh-CN.bytes)")
+        except Exception as e:
+            print(f"[translations] hash映射加载失败: {e}")
 
 
 _load()
@@ -118,3 +142,10 @@ def stats() -> dict:
 
 
 _preload_community_from_cache()
+
+
+def get_zh_by_key(key: str) -> str | None:
+    """通过 hash key 查中文翻译（用于 tooltip 的 Key 字段）"""
+    if not key:
+        return None
+    return _hash_to_zh.get(key)

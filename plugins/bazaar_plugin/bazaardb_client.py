@@ -225,12 +225,19 @@ def query_card_by_name(name: str) -> Optional[dict]:
 
 def _resolve_tooltip_text(tooltips: list, replacements: dict, tier_name: str) -> list:
     """解析一组 tooltip，替换占位符，过滤隐藏类型，返回文字列表。"""
+    from . import translations as trans
     HIDDEN_TYPES = {"bzdbgg.HiddenSearchable"}
     result = []
     for tip in tooltips:
         if tip.get("TooltipType") in HIDDEN_TYPES:
             continue
-        content = tip.get("Content", {}).get("Text", "") or ""
+        content_obj = tip.get("Content", {})
+        # 优先用 Key 查翻译，没有再用 Text
+        key = content_obj.get("Key", "")
+        text = content_obj.get("Text", "")
+        content = trans.get_zh_by_key(key) if key else ""
+        if not content:
+            content = text or ""
         if not content:
             continue
         for placeholder, tier_vals in replacements.items():
