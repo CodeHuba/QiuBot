@@ -29,7 +29,7 @@ MRMAO_BASE = "https://bazaar.mrmao.life"
 MRMAO_API_BASE = "https://bazaarapi.mrmao.life"
 
 # 当前赛季 ID（comprehensive-info 必传）
-CURRENT_SEASON_ID = 17
+CURRENT_SEASON_ID = 18
 
 # 4 个百科端点 → 本地缓存文件名
 WIKI_ENDPOINTS = {

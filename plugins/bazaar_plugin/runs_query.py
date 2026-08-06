@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from pathlib import Path
 from . import translations as _trans
+from .data_client import CURRENT_SEASON_ID
 
 
 ALIAS_FILE = "/opt/qiubot/data/bz_aliases.json"
@@ -142,7 +143,7 @@ class RunsQuery:
         if not self.conn:
             self.load()
 
-        sql = "SELECT id, hero, username, created_at, items_json, skills_json, stat_wins, stat_losses, screenshot_url FROM runs WHERE 1=1"
+        sql = "SELECT id, hero, username, created_at, items_json, skills_json, stat_wins, stat_losses, screenshot_url FROM runs WHERE season=CURRENT_SEASON_ID"
         params = []
 
         if hero:
@@ -339,7 +340,7 @@ class RunsQuery:
                     'card_names': card_names, 'not_found': not_found}
 
         # 拉取所有 runs（按条件过滤英雄/时间）
-        sql = "SELECT items_json, stat_wins FROM runs WHERE 1=1"
+        sql = "SELECT items_json, stat_wins FROM runs WHERE season=CURRENT_SEASON_ID"
         params = []
         if hero:
             sql += " AND LOWER(hero) = LOWER(?)"
@@ -403,7 +404,7 @@ class RunsQuery:
             card_name = card
 
         # 拉取所有 runs
-        sql = "SELECT items_json, stat_wins FROM runs WHERE 1=1"
+        sql = "SELECT items_json, stat_wins FROM runs WHERE season=CURRENT_SEASON_ID"
         params = []
         if days:
             cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
