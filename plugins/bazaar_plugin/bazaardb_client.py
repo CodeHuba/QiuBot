@@ -261,7 +261,7 @@ def format_card_brief(card: dict, zh_name: str = "") -> str:
     TAG_ZH  = {"Weapon": "武器", "Relic": "遗物", "Tool": "工具", "Aquatic": "水系",
                "Food": "食物", "Property": "房产", "Friend": "同伴", "Vehicle": "载具",
                "Damage": "伤害", "Shield": "护盾", "Heal": "治疗", "Poison": "毒",
-               "Burn": "灼烧", "Slow": "减速", "Freeze": "冻结", "Haste": "加速"}
+               "Burn": "灼烧", "Slow": "减速", "Freeze": "冻结", "Haste": "加速", "Instrument": "乐器"}
     ENC_ZH  = {"Golden": "黄金", "Heavy": "沉重", "Icy": "寒冰", "Turbo": "疾速",
                "Shielded": "护盾", "Restorative": "回复", "Toxic": "毒素",
                "Fiery": "炽焰", "Shiny": "闪亮", "Obsidian": "黑曜石", "Deadly": "致命",
