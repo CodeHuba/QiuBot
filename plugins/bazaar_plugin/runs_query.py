@@ -23,8 +23,9 @@ HERO_ZH_TO_EN = {
     '斯黛拉': 'Stelle', '机甲': 'Stelle',
     '朱尔斯': 'Jules', '吸血鬼': 'Jules',
     '卡诺克': 'Karnok', '兽人': 'Karnok',
+    '双龙': 'The Dragons', '龙': 'The Dragons',
 }
-HERO_EN_SET = {'vanessa', 'dooley', 'mak', 'pygmalien', 'stelle', 'jules', 'karnok'}
+HERO_EN_SET = {'vanessa', 'dooley', 'mak', 'pygmalien', 'stelle', 'jules', 'karnok', 'the dragons'}
 
 
 class RunsQuery:
@@ -108,6 +109,8 @@ class RunsQuery:
         if name.lower() in HERO_EN_SET:
             if name.lower() == 'pygmalien':
                 return 'Pygmalien'
+            if name.lower() == 'the dragons':
+                return 'The Dragons'
             return name.capitalize()
         if name in HERO_ZH_TO_EN:
             return HERO_ZH_TO_EN[name]

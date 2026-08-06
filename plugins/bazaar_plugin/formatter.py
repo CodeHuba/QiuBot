@@ -30,6 +30,7 @@ HERO_ZH = {
     "Mak": "马克",
     "Jules": "朱尔斯",
     "Stelle": "斯黛儿",
+    "The Dragons": "双龙",
     "Common": "通用",
 }
 
