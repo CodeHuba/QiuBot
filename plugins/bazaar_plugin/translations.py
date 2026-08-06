@@ -60,6 +60,18 @@ def _load():
         except Exception as e:
             print(f"[translations] hash映射加载失败: {e}")
 
+    # 4. 加载 tooltip 英文→中文映射
+    tooltip_file = CACHE_DIR / "tooltip_en_to_zh.json"
+    if tooltip_file.exists():
+        try:
+            import json as _j
+            data = _j.loads(tooltip_file.read_text(encoding="utf-8"))
+            _tooltip_en_to_zh.update(data)
+            print(f"[translations] tooltip映射: {len(data)} 条")
+        except Exception as e:
+            print(f"[translations] tooltip映射加载失败: {e}")
+
+
 
 _load()
 
