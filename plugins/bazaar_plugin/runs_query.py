@@ -146,8 +146,8 @@ class RunsQuery:
         if not self.conn:
             self.load()
 
-        sql = "SELECT id, hero, username, created_at, items_json, skills_json, stat_wins, stat_losses, screenshot_url FROM runs WHERE season=CURRENT_SEASON_ID"
-        params = []
+        sql = "SELECT id, hero, username, created_at, items_json, skills_json, stat_wins, stat_losses, screenshot_url FROM runs WHERE season=?"
+        params = [CURRENT_SEASON_ID]
 
         if hero:
             sql += " AND LOWER(hero) = LOWER(?)"
@@ -343,8 +343,8 @@ class RunsQuery:
                     'card_names': card_names, 'not_found': not_found}
 
         # 拉取所有 runs（按条件过滤英雄/时间）
-        sql = "SELECT items_json, stat_wins FROM runs WHERE season=CURRENT_SEASON_ID"
-        params = []
+        sql = "SELECT items_json, stat_wins FROM runs WHERE season=?"
+        params = [CURRENT_SEASON_ID]
         if hero:
             sql += " AND LOWER(hero) = LOWER(?)"
             params.append(hero)
@@ -407,8 +407,8 @@ class RunsQuery:
             card_name = card
 
         # 拉取所有 runs
-        sql = "SELECT items_json, stat_wins FROM runs WHERE season=CURRENT_SEASON_ID"
-        params = []
+        sql = "SELECT items_json, stat_wins FROM runs WHERE season=?"
+        params = [CURRENT_SEASON_ID]
         if days:
             cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
             sql += " AND created_at >= ?"
