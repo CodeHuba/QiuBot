@@ -257,7 +257,7 @@ def format_card_brief(card: dict, zh_name: str = "") -> str:
     TIER_ZH = {"Bronze": "铜", "Silver": "银", "Gold": "金", "Diamond": "钻", "Legendary": "传说"}
     HERO_ZH = {"Common": "通用", "Vanessa": "海盗", "Dooley": "工程师",
                "Mak": "法师", "Pygmalien": "猪", "Stelle": "机甲",
-               "Jules": "吸血鬼", "Karnok": "兽人"}
+               "Jules": "吸血鬼", "Karnok": "兽人", "The Dragons": "双龙"}
     TAG_ZH  = {"Weapon": "武器", "Relic": "遗物", "Tool": "工具", "Aquatic": "水系",
                "Food": "食物", "Property": "房产", "Friend": "同伴", "Vehicle": "载具",
                "Damage": "伤害", "Shield": "护盾", "Heal": "治疗", "Poison": "毒",
