@@ -921,10 +921,34 @@ class BazaarPlugin(NcatBotPlugin):
 
 
     async def _cmd_db(self, arg: str) -> str:
-        """查询 bazaardb.gg 卡牌数据（在线，支持中英文）"""
-        from . import bazaardb_client as bdb
-        import asyncio
+        """查询卡牌数据（优先本地 GameData.db，fallback bazaardb.gg）"""
+        from . import gamedata_client as gdc
+        from . import translations as trans
+        import asyncio, os
         loop = asyncio.get_event_loop()
+
+        en_name = arg.strip()
+        if trans.has_chinese(arg):
+            candidates = trans.search_zh(arg, limit=3)
+            if candidates:
+                en_name = candidates[0]
+
+        from dotenv import load_dotenv; load_dotenv()
+        db_path = os.getenv("GAMEDATA_DB", "")
+        raw = None
+        if db_path:
+            try:
+                raw = await loop.run_in_executor(None, gdc.query_raw_by_name, en_name, db_path)
+                if raw is None and en_name != arg.strip():
+                    raw = await loop.run_in_executor(None, gdc.query_raw_by_name, arg.strip(), db_path)
+            except Exception as e:
+                print(f"[bz db] GameData.db 查询失败: {e}")
+
+        if raw is not None:
+            zh = trans.get_zh(en_name) or ""
+            return gdc.format_card_from_raw(raw, zh_name=zh, db_path=db_path)
+
+        from . import bazaardb_client as bdb
         try:
             card = await loop.run_in_executor(None, bdb.query_card_by_name, arg)
         except Exception as e:
@@ -938,7 +962,7 @@ class BazaarPlugin(NcatBotPlugin):
             if len(results) == 1:
                 card = results[0]
             else:
-                names = "、".join(r.get("name","?") for r in results[:5])
+                names = "、".join(r.get("name", "?") for r in results[:5])
                 return f"找到多个结果: {names}\n请用更精确的名字重试，如: #bz db 万剑之王"
         return bdb.format_card(card)
 
