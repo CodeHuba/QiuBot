@@ -20,10 +20,137 @@ INGEST_TOKEN = '2320869dd20357f336a056abc6b095ea615651ceadabf698'
 
 app = Flask(__name__, static_folder='static')
 
-STATS_DB = '/opt/qiubot/data/query_stats.db'
+# 在 app.py 开头（imports 后）添加统一埋点中间件和 stats 表
+
+import time
+from flask import g
+
+# 扩展 query_log 表，添加 fingerprint 和 duration
+# 新增 stats_pv 表记录页面访问
+def _init_stats_tables():
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    
+    # API 调用日志（扩展）
+    conn.execute('''CREATE TABLE IF NOT EXISTS api_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        endpoint TEXT,
+        method TEXT,
+        params_json TEXT,
+        ip TEXT,
+        fingerprint TEXT,
+        result_count INTEGER,
+        success INTEGER,
+        duration_ms INTEGER,
+        created_at TEXT
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_api_endpoint ON api_log(endpoint)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_api_time ON api_log(created_at)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_api_fp ON api_log(fingerprint)')
+    
+    # 页面 PV
+    conn.execute('''CREATE TABLE IF NOT EXISTS page_view (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tab TEXT,
+        ip TEXT,
+        fingerprint TEXT,
+        created_at TEXT
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_pv_tab ON page_view(tab)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_pv_time ON page_view(created_at)')
+    
+    # Feedback 行为
+    conn.execute('''CREATE TABLE IF NOT EXISTS feedback_action (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT,
+        feedback_id INTEGER,
+        ip TEXT,
+        fingerprint TEXT,
+        created_at TEXT
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_fb_action ON feedback_action(action)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_fb_time ON feedback_action(created_at)')
+    
+    conn.commit()
+    conn.close()
+
+_init_stats_tables()
+
+STATS_DB = '/opt/qiubot/data/stats.db'
+
+@app.before_request
+def before_request():
+    g.start_time = time.time()
+    g.fingerprint = request.headers.get('X-Fingerprint', '')
+
+@app.after_request
+def after_request(response):
+    if hasattr(g, 'start_time'):
+        duration_ms = int((time.time() - g.start_time) * 1000)
+        endpoint = request.endpoint
+        if endpoint and endpoint.startswith('api_'):
+            _log_api_call(
+                endpoint=request.path,
+                method=request.method,
+                params=dict(request.args) or dict(request.form) or {},
+                ip=request.headers.get('X-Forwarded-For', request.remote_addr),
+                fingerprint=g.fingerprint,
+                result_count=getattr(g, 'result_count', 0),
+                success=response.status_code < 400,
+                duration_ms=duration_ms
+            )
+    return response
+
+def _log_api_call(endpoint, method, params, ip, fingerprint, result_count, success, duration_ms):
+    try:
+        import sqlite3 as _sl, json as _j
+        from datetime import datetime
+        conn = _sl.connect(STATS_DB)
+        conn.execute(
+            'INSERT INTO api_log (endpoint, method, params_json, ip, fingerprint, result_count, success, duration_ms, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+            (endpoint, method, _j.dumps(params, ensure_ascii=False), ip, fingerprint, result_count, 1 if success else 0, duration_ms, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        conn.close()
+    except: pass
+
+def _log_page_view(tab, ip, fingerprint):
+    try:
+        import sqlite3 as _sl
+        from datetime import datetime
+        conn = _sl.connect(STATS_DB)
+        conn.execute('INSERT INTO page_view (tab, ip, fingerprint, created_at) VALUES (?,?,?,?)',
+                     (tab, ip, fingerprint, datetime.utcnow().isoformat()))
+        conn.commit()
+        conn.close()
+    except: pass
+
+def _log_feedback_action(action, feedback_id, ip, fingerprint):
+    try:
+        import sqlite3 as _sl
+        from datetime import datetime
+        conn = _sl.connect(STATS_DB)
+        conn.execute('INSERT INTO feedback_action (action, feedback_id, ip, fingerprint, created_at) VALUES (?,?,?,?,?)',
+                     (action, feedback_id, ip, fingerprint, datetime.utcnow().isoformat()))
+        conn.commit()
+        conn.close()
+    except: pass
+
+# 新增埋点 API
+@app.route('/api/track/pv', methods=['POST'])
+def api_track_pv():
+    data = request.get_json(silent=True) or {}
+    tab = data.get('tab', '')
+    if tab:
+        _log_page_view(tab, request.headers.get('X-Forwarded-For', request.remote_addr), g.fingerprint)
+    return jsonify({'ok': True})
+
+
+
+QUERY_STATS_DB = '/opt/qiubot/data/query_stats.db'
 
 def _init_stats_db():
-    conn = _sqlite3.connect(STATS_DB)
+    conn = _sqlite3.connect(QUERY_STATS_DB)
     conn.execute('''CREATE TABLE IF NOT EXISTS query_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         query_type TEXT,
@@ -40,7 +167,7 @@ def _init_stats_db():
 
 def _log_query(query_type, params, ip, result_count, success):
     try:
-        conn = _sqlite3.connect(STATS_DB)
+        conn = _sqlite3.connect(QUERY_STATS_DB)
         conn.execute(
             'INSERT INTO query_log (query_type, params_json, ip, result_count, success, created_at) VALUES (?,?,?,?,?,?)',
             (query_type, json.dumps(params, ensure_ascii=False), ip,
@@ -179,7 +306,7 @@ def api_heroes():
 @app.route('/api/suggestions')
 def api_suggestions():
     try:
-        conn = _sqlite3.connect(STATS_DB)
+        conn = _sqlite3.connect(QUERY_STATS_DB)
         rows = conn.execute(
             "SELECT params_json, query_type FROM query_log WHERE success=1 ORDER BY id DESC LIMIT 500"
         ).fetchall()
@@ -361,6 +488,7 @@ def api_feedback_post():
         conn.commit()
         row = conn.execute('SELECT * FROM feedback WHERE id=?', (fid,)).fetchone()
         conn.close()
+        _log_feedback_action('submit', fid, request.headers.get('X-Forwarded-For', request.remote_addr), g.fingerprint)
         return jsonify(dict(row)), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -375,6 +503,7 @@ def api_feedback_like(fid):
         conn.close()
         if not likes:
             return jsonify({'error': 'not found'}), 404
+        _log_feedback_action('like', fid, request.headers.get('X-Forwarded-For', request.remote_addr), g.fingerprint)
         return jsonify({'likes': likes[0]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -418,9 +547,77 @@ def api_comments_post(fid):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/stats/overview', methods=['GET'])
+@app.route('/api/stats/overview', methods=['GET'])
+def api_stats_overview():
+    """数据看板总览"""
+    import sqlite3 as _sl
+    days = int(request.args.get('days', 7))
+    try:
+        conn = _sl.connect(STATS_DB)
+        cutoff = (datetime.utcnow() - __import__('datetime').timedelta(days=days)).isoformat()
+
+        # API 总调用量
+        total_calls = conn.execute('SELECT COUNT(*) FROM api_log WHERE created_at >= ?', (cutoff,)).fetchone()[0]
+        # UV（独立 fingerprint）
+        uv = conn.execute('SELECT COUNT(DISTINCT fingerprint) FROM api_log WHERE created_at >= ? AND fingerprint != ""', (cutoff,)).fetchone()[0]
+        # UV by IP（未带 fingerprint 的）
+        uv_ip = conn.execute('SELECT COUNT(DISTINCT ip) FROM api_log WHERE created_at >= ? AND fingerprint = ""', (cutoff,)).fetchone()[0]
+        total_uv = uv + uv_ip
+
+        # PV by tab
+        tab_pv = [{'tab': r[0], 'cnt': r[1]} for r in conn.execute(
+            'SELECT tab, COUNT(*) as cnt FROM page_view WHERE created_at >= ? GROUP BY tab ORDER BY cnt DESC', (cutoff,)
+        ).fetchall()]
+
+        # API 调用分布
+        api_dist = [{'endpoint': r[0], 'cnt': r[1], 'avg_ms': r[2], 'errors': r[3]} for r in conn.execute(
+            'SELECT endpoint, COUNT(*) as cnt, AVG(duration_ms) as avg_ms, SUM(CASE WHEN success=0 THEN 1 ELSE 0 END) as errors FROM api_log WHERE created_at >= ? GROUP BY endpoint ORDER BY cnt DESC', (cutoff,)
+        ).fetchall()]
+
+        # 每日 API 调用趋势（按天）
+        daily = [{'day': r[0], 'cnt': r[1], 'uv': r[2]} for r in conn.execute(
+            'SELECT DATE(created_at) as day, COUNT(*) as cnt, COUNT(DISTINCT COALESCE(NULLIF(fingerprint,""), ip)) as uv FROM api_log WHERE created_at >= ? GROUP BY day ORDER BY day', (cutoff,)
+        ).fetchall()]
+
+        # Feedback 行为统计
+        fb_actions = {r[0]: r[1] for r in conn.execute(
+            'SELECT action, COUNT(*) as cnt FROM feedback_action WHERE created_at >= ? GROUP BY action', (cutoff,)
+        ).fetchall()}
+
+        conn.close()
+
+        # 热门查询卡牌（从旧库）
+        old_conn = _sl.connect('/opt/qiubot/data/query_stats.db')
+        hot_cards = [{'cards': r[0], 'cnt': r[1]} for r in old_conn.execute(
+            """SELECT json_extract(params_json,'$.cards') as cards, COUNT(*) as cnt
+               FROM query_log WHERE created_at >= ? AND query_type IN ('winrate','partner') AND success=1
+               GROUP BY cards ORDER BY cnt DESC LIMIT 10""", (cutoff,)
+        ).fetchall()]
+        old_conn.close()
+
+        return jsonify({
+            'period_days': days,
+            'total_calls': total_calls,
+            'total_uv': total_uv,
+            'tab_pv': tab_pv,
+            'api_dist': api_dist,
+            'daily': daily,
+            'fb_actions': fb_actions,
+            'hot_cards': hot_cards,
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
+
+@app.route('/admin/stats')
+def stats_dashboard():
+    return send_from_directory('static', 'stats.html')
 
 
 if __name__ == '__main__':

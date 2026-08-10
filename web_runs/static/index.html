@@ -309,6 +309,7 @@ let lastQuery = 0;
 function switchTab(tab) {
   if (tab === "topcard" && !window._topcardLoaded) { setTimeout(loadTopcard, 0); }
   if (tab === "feedback" && !_fbLoaded) { setTimeout(() => loadFeedback(true), 0); }
+  trackPV(tab);
   document.querySelectorAll('.nav-tab').forEach((t,i)=>{
     t.classList.toggle('active', ['runs','winrate','partner','topcard','feedback'][i]===tab);
   });
@@ -803,6 +804,42 @@ async function postComment(fbId, parentId) {
 }
 
 function loadMoreFeedback() { loadFeedback(false); }
+
+
+// ── 匿名 fingerprint ──
+function getFingerprint() {
+  let fp = localStorage.getItem('_bz_fp');
+  if (!fp) {
+    fp = 'fp_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem('_bz_fp', fp);
+  }
+  return fp;
+}
+
+// 全局覆盖 fetch，自动带上 fingerprint
+const _origFetch = window.fetch;
+window.fetch = function(url, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  if (typeof opts.headers === 'object' && !(opts.headers instanceof Headers)) {
+    opts.headers['X-Fingerprint'] = getFingerprint();
+  }
+  return _origFetch(url, opts);
+};
+
+// Tab PV 上报
+function trackPV(tab) {
+  fetch('/api/track/pv', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({tab})
+  }).catch(() => {});
+}
+
+// 首次进入上报
+window.addEventListener('DOMContentLoaded', () => {
+  trackPV('runs');
+});
 
 </script>
 </body>

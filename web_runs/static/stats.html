@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>巴扎阵容库 · 数据看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh}
+.navbar{background:#0d1221;border-bottom:1px solid #1f2937;padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:16px;font-weight:700;color:#f59e0b}
+.nav-link{font-size:13px;color:#9ca3af;text-decoration:none;transition:color .2s}
+.nav-link:hover{color:#f59e0b}
+.main{max-width:1200px;margin:0 auto;padding:28px 20px}
+.page-title{font-size:20px;font-weight:700;color:#e2e8f0;margin-bottom:6px}
+.page-sub{font-size:13px;color:#6b7280;margin-bottom:24px}
+.controls{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;align-items:center}
+.ctrl-label{font-size:13px;color:#6b7280}
+.day-btn{padding:6px 16px;border-radius:20px;border:1px solid #374151;background:transparent;color:#9ca3af;cursor:pointer;font-size:13px;transition:all .2s}
+.day-btn:hover{border-color:#f59e0b;color:#f59e0b}
+.day-btn.active{background:#f59e0b;color:#0a0e1a;border-color:#f59e0b;font-weight:600}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.kpi-card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:20px}
+.kpi-label{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.kpi-value{font-size:32px;font-weight:800;color:#f59e0b;line-height:1}
+.kpi-sub{font-size:12px;color:#6b7280;margin-top:6px}
+.section{margin-bottom:24px}
+.section-title{font-size:14px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:768px){.grid-2{grid-template-columns:1fr}}
+.chart-card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:20px}
+.chart-title{font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:14px}
+.chart-wrap{position:relative;height:220px}
+.table-card{background:#111827;border:1px solid #1f2937;border-radius:12px;overflow:hidden}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #1f2937;background:#0d1221}
+.tbl td{padding:10px 16px;border-bottom:1px solid #1a2235;color:#e2e8f0}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#1a2235}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-green{background:#065f46;color:#34d399}
+.badge-yellow{background:#78350f;color:#fbbf24}
+.badge-red{background:#7f1d1d;color:#f87171}
+.tab-bar-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #1a2235}
+.tab-bar-item:last-child{border-bottom:none}
+.tab-bar-name{flex:1;font-size:13px;color:#e2e8f0}
+.tab-bar-count{font-size:13px;font-weight:600;color:#f59e0b}
+.tab-bar-fill{height:6px;border-radius:3px;background:#f59e0b;transition:width .5s ease}
+.tab-bar-wrap{flex:2;background:#1f2937;border-radius:3px;overflow:hidden}
+.loading{text-align:center;padding:60px;color:#6b7280}
+.error-msg{background:#1f1010;border:1px solid #7f1d1d;border-radius:10px;padding:14px;color:#f87171;font-size:13px;margin-bottom:16px}
+.fb-action-grid{display:flex;gap:16px;flex-wrap:wrap}
+.fb-action-card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:18px 24px;flex:1;min-width:120px;text-align:center}
+.fb-action-icon{font-size:28px;margin-bottom:6px}
+.fb-action-value{font-size:24px;font-weight:700;color:#e2e8f0}
+.fb-action-label{font-size:12px;color:#6b7280;margin-top:4px}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="logo">📊 巴扎阵容库 · 数据看板</div>
+  <a href="/" class="nav-link">← 返回查询页</a>
+</nav>
+<div class="main">
+  <div class="page-title">数据看板</div>
+  <div class="page-sub" id="update-time">加载中...</div>
+
+  <div class="controls">
+    <span class="ctrl-label">统计周期：</span>
+    <button class="day-btn" onclick="setDays(1)">今天</button>
+    <button class="day-btn active" onclick="setDays(7)">近 7 天</button>
+    <button class="day-btn" onclick="setDays(30)">近 30 天</button>
+    <button class="day-btn" onclick="setDays(90)">近 90 天</button>
+  </div>
+
+  <div id="main-content"><div class="loading">加载中...</div></div>
+</div>
+
+<script>
+let _days = 7;
+let _trendChart = null, _apiChart = null;
+
+function setDays(d) {
+  _days = d;
+  document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  loadStats();
+}
+
+const TAB_NAMES = {runs:'阵容查询', winrate:'胜率查询', partner:'最佳搭档', topcard:'职业榜单', feedback:'意见反馈', stats:'数据看板'};
+const API_NAMES = {
+  '/api/runs':'阵容查询','/api/winrate':'胜率查询','/api/partner':'最佳搭档',
+  '/api/topcard':'职业榜单','/api/feedback':'意见反馈','/api/track/pv':'页面埋点','/api/ingest':'数据采集'
+};
+
+function fmtN(n) {
+  if (n >= 10000) return (n/10000).toFixed(1) + 'w';
+  if (n >= 1000) return (n/1000).toFixed(1) + 'k';
+  return n;
+}
+
+async function loadStats() {
+  try {
+    const resp = await fetch('/api/stats/overview?days=' + _days);
+    if (!resp.ok) throw new Error('请求失败');
+    const d = await resp.json();
+    renderStats(d);
+    document.getElementById('update-time').textContent = '最后更新：' + new Date().toLocaleString('zh-CN') + '  · 统计周期：近 ' + _days + ' 天';
+  } catch(e) {
+    document.getElementById('main-content').innerHTML = '<div class="error-msg">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function renderStats(d) {
+  const el = document.getElementById('main-content');
+
+  // KPI
+  const totalCalls = d.total_calls || 0;
+  const totalUV = d.total_uv || 0;
+  const apiDist = d.api_dist || [];
+  const errorRate = totalCalls > 0 ? ((apiDist.reduce((s,a)=>s+(a.errors||0),0)/totalCalls)*100).toFixed(1) : '0.0';
+  const avgMs = apiDist.length > 0 ? Math.round(apiDist.reduce((s,a)=>s+(a.avg_ms||0),0)/apiDist.length) : 0;
+
+  el.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">API 调用量</div>
+        <div class="kpi-value">${fmtN(totalCalls)}</div>
+        <div class="kpi-sub">近 ${_days} 天</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">独立访客 UV</div>
+        <div class="kpi-value">${fmtN(totalUV)}</div>
+        <div class="kpi-sub">fingerprint 去重</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">平均响应时间</div>
+        <div class="kpi-value">${avgMs}<span style="font-size:16px;font-weight:400;color:#9ca3af">ms</span></div>
+        <div class="kpi-sub">API 平均耗时</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">错误率</div>
+        <div class="kpi-value" style="color:${parseFloat(errorRate)>5?'#ef4444':'#10b981'}">${errorRate}<span style="font-size:16px;font-weight:400;color:#9ca3af">%</span></div>
+        <div class="kpi-sub">API 失败占比</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Feedback 互动</div>
+      <div class="fb-action-grid">
+        <div class="fb-action-card"><div class="fb-action-icon">✍️</div><div class="fb-action-value">${d.fb_actions?.submit||0}</div><div class="fb-action-label">提交反馈</div></div>
+        <div class="fb-action-card"><div class="fb-action-icon">❤️</div><div class="fb-action-value">${d.fb_actions?.like||0}</div><div class="fb-action-label">点赞</div></div>
+        <div class="fb-action-card"><div class="fb-action-icon">💬</div><div class="fb-action-value">${d.fb_actions?.comment||0}</div><div class="fb-action-label">评论</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2 section">
+      <div class="chart-card">
+        <div class="chart-title">📈 每日 API 调用趋势</div>
+        <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">🍩 功能使用分布</div>
+        <div class="chart-wrap"><canvas id="api-chart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2 section">
+      <div>
+        <div class="section-title">Tab 访问量</div>
+        <div class="table-card" id="tab-pv-list"></div>
+      </div>
+      <div>
+        <div class="section-title">热门查询卡牌</div>
+        <div class="table-card">
+          <table class="tbl">
+            <thead><tr><th>#</th><th>卡牌</th><th>查询次数</th></tr></thead>
+            <tbody id="hot-cards-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">API 接口详情</div>
+      <div class="table-card">
+        <table class="tbl">
+          <thead><tr><th>接口</th><th>调用量</th><th>平均耗时</th><th>错误数</th><th>状态</th></tr></thead>
+          <tbody id="api-detail-body"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // 趋势图
+  const daily = d.daily || [];
+  if (_trendChart) _trendChart.destroy();
+  _trendChart = new Chart(document.getElementById('trend-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: daily.map(r => r.day?.slice(5)),
+      datasets: [
+        {label:'调用量', data: daily.map(r=>r.cnt), backgroundColor:'#f59e0b88', borderColor:'#f59e0b', borderWidth:1, yAxisID:'y'},
+        {label:'UV', data: daily.map(r=>r.uv), type:'line', borderColor:'#60a5fa', backgroundColor:'transparent', borderWidth:2, pointRadius:3, yAxisID:'y1'},
+      ]
+    },
+    options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:'#9ca3af',font:{size:11}}}},
+      scales:{
+        x:{ticks:{color:'#6b7280',font:{size:10}}, grid:{color:'#1f2937'}},
+        y:{ticks:{color:'#6b7280',font:{size:10}}, grid:{color:'#1f2937'}, position:'left'},
+        y1:{ticks:{color:'#60a5fa',font:{size:10}}, grid:{display:false}, position:'right'},
+      }}
+  });
+
+  // 功能分布饼图（排除埋点类 API）
+  const userApis = apiDist.filter(a => !['/api/track/pv','/api/ingest','/api/stats/overview'].includes(a.endpoint));
+  if (_apiChart) _apiChart.destroy();
+  _apiChart = new Chart(document.getElementById('api-chart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: userApis.map(a => API_NAMES[a.endpoint] || a.endpoint),
+      datasets: [{data: userApis.map(a=>a.cnt), backgroundColor:['#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fb923c','#e879f9']}]
+    },
+    options: {responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'right', labels:{color:'#9ca3af',font:{size:11},padding:10}}}}
+  });
+
+  // Tab PV
+  const tabPv = d.tab_pv || [];
+  const maxPv = Math.max(...tabPv.map(t=>t.cnt), 1);
+  document.getElementById('tab-pv-list').innerHTML = tabPv.length ? tabPv.map(t =>
+    `<div class="tab-bar-item">
+      <div class="tab-bar-name">${TAB_NAMES[t.tab]||t.tab}</div>
+      <div class="tab-bar-wrap"><div class="tab-bar-fill" style="width:${Math.round(t.cnt/maxPv*100)}%"></div></div>
+      <div class="tab-bar-count">${t.cnt}</div>
+    </div>`
+  ).join('') : '<div class="loading" style="padding:20px">暂无数据</div>';
+
+  // 热门卡牌
+  const hotCards = d.hot_cards || [];
+  document.getElementById('hot-cards-body').innerHTML = hotCards.length ? hotCards.slice(0,8).map((c,i) => {
+    let name = c.cards;
+    try { const arr = JSON.parse(c.cards); name = Array.isArray(arr) ? arr.join(' + ') : c.cards; } catch(e){}
+    return `<tr><td>${['🥇','🥈','🥉'][i]||i+1}</td><td>${name||'-'}</td><td>${c.cnt}</td></tr>`;
+  }).join('') : '<tr><td colspan="3" style="color:#6b7280;text-align:center;padding:20px">暂无数据</td></tr>';
+
+  // API 详情
+  document.getElementById('api-detail-body').innerHTML = apiDist.map(a => {
+    const errPct = a.cnt > 0 ? ((a.errors||0)/a.cnt*100).toFixed(0) : 0;
+    const badge = errPct > 10 ? 'badge-red' : errPct > 3 ? 'badge-yellow' : 'badge-green';
+    const status = errPct > 10 ? '异常' : errPct > 3 ? '注意' : '正常';
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px">${a.endpoint}</td>
+      <td>${a.cnt}</td>
+      <td>${Math.round(a.avg_ms||0)} ms</td>
+      <td>${a.errors||0}</td>
+      <td><span class="badge ${badge}">${status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+loadStats();
+</script>
+</body>
+</html>
