@@ -14,9 +14,9 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, abort
 
 sys.path.insert(0, '/opt/qiubot')
 from plugins.bazaar_plugin.runs_query import RunsQuery
-from plugins.bazaar_plugin.data_client import CURRENT_SEASON_ID
+from plugins.bazaar_plugin.data_client import CURRENT_SEASON_ID, CURRENT_PHASE
 
-INGEST_TOKEN = 'eb3ff2d2de6ae942723c332e05882a8cfea2df1adf7d5b78'
+INGEST_TOKEN = '2320869dd20357f336a056abc6b095ea615651ceadabf698'
 
 app = Flask(__name__, static_folder='static')
 
@@ -252,8 +252,8 @@ def api_ingest():
                 conn.execute("""INSERT OR IGNORE INTO runs
                     (id, hero, username, created_at, items_json, skills_json, combats_json,
                      stat_wins, stat_losses, player_rating, player_rating_after,
-                     player_rank, player_rank_after, screenshot_url, raw_json, collected_at, season)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     player_rank, player_rank_after, screenshot_url, raw_json, collected_at, season, phase)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (run['id'], run.get('hero'), run.get('username'),
                      run.get('createdAt'),
                      __import__('json').dumps(run.get('items', []), ensure_ascii=False),
@@ -264,7 +264,7 @@ def api_ingest():
                      run.get('playerRank'), run.get('playerRankAfter'),
                      run.get('screenshotUrl'),
                      __import__('json').dumps(run, ensure_ascii=False),
-                     __import__('datetime').datetime.now().isoformat(), CURRENT_SEASON_ID))
+                     __import__('datetime').datetime.now().isoformat(), CURRENT_SEASON_ID, CURRENT_PHASE))
                 new_count += conn.total_changes > 0 and 1 or 0
             except Exception as e:
                 pass

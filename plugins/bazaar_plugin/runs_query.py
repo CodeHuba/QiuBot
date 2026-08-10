@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from pathlib import Path
 from . import translations as _trans
-from .data_client import CURRENT_SEASON_ID
+from .data_client import CURRENT_SEASON_ID, CURRENT_PHASE
 
 
 ALIAS_FILE = "/opt/qiubot/data/bz_aliases.json"
@@ -45,6 +45,7 @@ class RunsQuery:
         self.card_aliases = {}      # 别名 -> 官方中文名
         self.hero_aliases = {}      # 别名 -> 英雄名
         self.tex_map = {}           # 英文名 -> 图片文件名
+        self.card_heroes = {}       # cardId -> [hero list]
 
     def load(self):
         """加载数据库、映射表和翻译"""
@@ -68,6 +69,11 @@ class RunsQuery:
         tex_path = Path(__file__).parent / 'cache' / 'item_tex_map.json'
         if tex_path.exists():
             self.tex_map = json.loads(tex_path.read_text(encoding='utf-8'))
+
+        # 加载卡牌职业映射
+        heroes_path = Path('/opt/qiubot/data/card_heroes_map.json')
+        if heroes_path.exists():
+            self.card_heroes = json.loads(heroes_path.read_text(encoding="utf-8"))
 
         # 加载自定义别名
         alias_path = Path(ALIAS_FILE)
@@ -313,7 +319,8 @@ class RunsQuery:
                 cards: list,
                 hero: str = None,
                 days: int = None,
-                min_wins_threshold: int = 10) -> dict:
+                min_wins_threshold: int = 10,
+                all_phases: bool = False) -> dict:
         """
         计算包含指定卡牌组合的 runs 中，达到 min_wins_threshold 胜的比率。
         返回 {total, ten_win, rate, card_names, not_found}
@@ -342,9 +349,12 @@ class RunsQuery:
             return {'total': 0, 'ten_win': 0, 'rate': 0.0,
                     'card_names': card_names, 'not_found': not_found}
 
-        # 拉取所有 runs（按条件过滤英雄/时间）
+        # 拉取所有 runs（按条件过滤英雄/时间/阶段）
         sql = "SELECT items_json, stat_wins FROM runs WHERE season=?"
         params = [CURRENT_SEASON_ID]
+        if not all_phases:
+            sql += " AND phase=?"
+            params.append(CURRENT_PHASE)
         if hero:
             sql += " AND LOWER(hero) = LOWER(?)"
             params.append(hero)
@@ -383,7 +393,8 @@ class RunsQuery:
                 days: int = None,
                 min_count: int = 50,
                 top_n: int = 3,
-                wins_threshold: int = 10) -> dict:
+                wins_threshold: int = 10,
+                all_phases: bool = False) -> dict:
         """
         查询与某张卡搭配时胜率最高的前 top_n 张搭档卡。
         只统计出现次数 >= min_count 的搭档。
@@ -406,9 +417,12 @@ class RunsQuery:
         if card_name == en_name:
             card_name = card
 
-        # 拉取所有 runs
+        # 拉取所有 runs（按条件过滤阶段/时间）
         sql = "SELECT items_json, stat_wins FROM runs WHERE season=?"
         params = [CURRENT_SEASON_ID]
+        if not all_phases:
+            sql += " AND phase=?"
+            params.append(CURRENT_PHASE)
         if days:
             cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
             sql += " AND created_at >= ?"
@@ -476,6 +490,93 @@ class RunsQuery:
         }
 
 
+
+    def topcard(self,
+                hero: str,
+                top_n: int = 5,
+                days: int = None,
+                min_count: int = 50,
+                all_phases: bool = False) -> dict:
+        """
+        查询某个职业下胜率最高的 top_n 张物品卡（只统计该职业专属卡）。
+        统计该职业所有 runs 中每张卡的出现次数、胜场数（stat_wins >= 10）、胜率。
+        返回 {hero, hero_zh, top: [{name_zh, name_en, total, ten_win, rate}], total_runs, days}
+        """
+        import json as _json
+        from datetime import datetime as _dt, timedelta as _td
+
+        if not self.conn:
+            self.load()
+
+        # 拉取该英雄所有 runs（按条件过滤阶段/时间）
+        sql = "SELECT items_json, stat_wins FROM runs WHERE season=? AND LOWER(hero)=LOWER(?)"
+        params = [CURRENT_SEASON_ID, hero]
+        if not all_phases:
+            sql += " AND phase=?"
+            params.append(CURRENT_PHASE)
+        if days:
+            cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
+            sql += " AND created_at >= ?"
+            params.append(cutoff)
+        rows = self.conn.execute(sql, params).fetchall()
+
+        # 统计每张卡的出现次数和胜场数（只统计该职业专属卡）
+        card_total: dict = {}   # cardId -> total count
+        card_wins: dict = {}    # cardId -> 10win count
+
+        # GameData.db 中双龙的职业名为 Hero8
+        _hero_gamedata = {'The Dragons': 'Hero8'}.get(hero, hero)
+
+        for items_json, wins in rows:
+            try:
+                items = _json.loads(items_json)
+                run_ids = {item['cardId'] for item in items if 'cardId' in item}
+            except Exception:
+                continue
+            is_win = (wins or 0) >= 10
+            for cid in run_ids:
+                # 过滤：只统计该职业专属卡
+                card_heroes_list = self.card_heroes.get(cid, [])
+                if _hero_gamedata not in card_heroes_list:
+                    continue
+                card_total[cid] = card_total.get(cid, 0) + 1
+                if is_win:
+                    card_wins[cid] = card_wins.get(cid, 0) + 1
+
+        # 过滤低频卡，计算胜率
+        results = []
+        for cid, total in card_total.items():
+            if total < min_count:
+                continue
+            info = self.card_mapping.get(cid, {})
+            name_en = info.get('name', cid)
+            name_zh = self.get_zh_name(name_en)
+            ten_win = card_wins.get(cid, 0)
+            rate = ten_win / total if total > 0 else 0.0
+            results.append({
+                'name_zh': name_zh if name_zh != name_en else name_en,
+                'name_en': name_en,
+                'total': total,
+                'ten_win': ten_win,
+                'rate': rate,
+            })
+
+        results.sort(key=lambda x: (-x['rate'], -x['total']))
+        top = results[:top_n]
+
+        hero_map = {'Vanessa': '海盗/凡妮莎', 'Dooley': '工程师/杜利',
+                    'Mak': '法师/马克', 'Pygmalien': '猪/皮格',
+                    'Stelle': '机甲/斯黛拉', 'Jules': '吸血鬼/朱尔斯',
+                    'Karnok': '兽人/卡诺克', 'The Dragons': '双龙'}
+        hero_zh = hero_map.get(hero, hero)
+
+        return {
+            'hero': hero,
+            'hero_zh': hero_zh,
+            'top': top,
+            'total_runs': len(rows),
+            'days': days,
+        }
 _client = None
 
 def get_client() -> RunsQuery:

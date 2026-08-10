@@ -293,6 +293,12 @@ class BazaarPlugin(NcatBotPlugin):
         if sub in {"winrate", "胜率"}:
             return await self._cmd_winrate(arg, event)
 
+        if sub in {"topcard", "胜率卡", "职业胜率"}:
+            return await self._cmd_topcard(arg, event)
+
+        if sub in {"setphase", "切换阶段"}:
+            return await self._cmd_setphase(arg, event)
+
         if sub in {"alias", "别名"}:
             return await self._cmd_alias(arg)
 
@@ -669,11 +675,15 @@ class BazaarPlugin(NcatBotPlugin):
             arg = arg[:days_m.start()] + arg[days_m.end():]
             arg = arg.strip()
 
+        all_phases = '--all-phases' in arg
+        if all_phases:
+            arg = arg.replace('--all-phases', '').strip()
+
         card = arg.strip()
         if not card:
             return "[巴扎] 请指定卡牌名称"
 
-        result = client.partner(card=card, days=days)
+        result = client.partner(card=card, days=days, all_phases=all_phases)
 
         if result["not_found"]:
             return f"[巴扎] 找不到卡牌「{card}」，请确认名称"
@@ -859,6 +869,10 @@ class BazaarPlugin(NcatBotPlugin):
             arg = arg[:days_m.start()] + arg[days_m.end():]
             arg = arg.strip()
 
+        all_phases = '--all-phases' in arg
+        if all_phases:
+            arg = arg.replace('--all-phases', '').strip()
+
         hero = None
         cards = []
         parts = arg.split()
@@ -875,7 +889,7 @@ class BazaarPlugin(NcatBotPlugin):
         if not cards:
             return "[巴扎] 请指定至少一张卡牌，例如: #bz winrate 火炮阵列"
 
-        result = client.winrate(cards=cards, hero=hero, days=days)
+        result = client.winrate(cards=cards, hero=hero, days=days, all_phases=all_phases)
 
         not_found = result.get('not_found', [])
         if not_found and not result['total']:
@@ -918,6 +932,161 @@ class BazaarPlugin(NcatBotPlugin):
         lines.append("💡 #bz winrate <卡牌> [+卡牌2] [英雄] [--days N]")
 
         return '\n'.join(lines)
+
+    async def _cmd_topcard(self, arg: str, event=None) -> str:
+        from .runs_query import get_client
+        import re as _re
+
+        hero_zh_map = {
+            'Vanessa': '海盗/凡妮莎', 'Dooley': '工程师/杜利',
+            'Mak': '法师/马克', 'Pygmalien': '猪/皮格',
+            'Stelle': '机甲/斯黛拉', 'Jules': '吸血鬼/朱尔斯',
+            'Karnok': '兽人/卡诺克', 'The Dragons': '双龙',
+        }
+        all_heroes = list(hero_zh_map.keys())
+
+        if not arg:
+            hero_list = '  '.join(
+                f"{v.split('/')[0]}({k})" for k, v in hero_zh_map.items()
+            )
+            return (
+                "📊 职业胜率卡 Top N 查询\n\n"
+                "用法: #bz topcard <职业> [N] [--days D]\n\n"
+                "示例:\n"
+                "  #bz topcard 海盗\n"
+                "  #bz topcard Vanessa 10\n"
+                "  #bz topcard 机甲 5 --days 7\n\n"
+                f"可选职业: {hero_list}"
+            )
+
+        try:
+            client = get_client()
+        except Exception as e:
+            return f"[巴扎] topcard 初始化失败: {e}"
+
+        # 解析 --days
+        days = None
+        days_m = _re.search(r'--days\s+(\d+)', arg)
+        if days_m:
+            days = int(days_m.group(1))
+            arg = (arg[:days_m.start()] + arg[days_m.end():]).strip()
+
+        all_phases = '--all-phases' in arg
+        if all_phases:
+            arg = arg.replace('--all-phases', '').strip()
+
+        # 解析职业和 top_n
+        top_n = 5
+        hero = None
+        for part in arg.split():
+            if part.isdigit():
+                top_n = max(1, min(int(part), 30))
+            elif not hero:
+                hero = client.resolve_hero(part)
+
+        if not hero:
+            return f"[巴扎] 未识别职业，请输入职业名（如：海盗、Vanessa、机甲）"
+
+        result = client.topcard(hero=hero, top_n=top_n, days=days, all_phases=all_phases)
+
+        hero_zh = hero_zh_map.get(hero, hero)
+        title_parts = [f"{hero_zh}", f"Top {top_n} 胜率卡"]
+        if days:
+            title_parts.append(f"近{days}天")
+
+        total_runs = result['total_runs']
+        top = result['top']
+
+        if total_runs == 0:
+            return f"📊 {'  |  '.join(title_parts)}\n\n暂无数据"
+
+        lines = [
+            f"📊 {'  |  '.join(title_parts)}",
+            f"(本赛季共 {total_runs} 局)",
+            "",
+        ]
+        for i, item in enumerate(top, 1):
+            bar_len = int(item['rate'] * 20)
+            bar = '█' * bar_len + '░' * (20 - bar_len)
+            lines.append(
+                f"{i}. {item['name_zh']}"
+            )
+            lines.append(
+                f"   {bar} {item['rate']*100:.1f}%"
+            )
+            lines.append(
+                f"   {item['ten_win']}胜 / {item['total']}局"
+            )
+
+        lines.append("")
+        lines.append("💡 #bz topcard <职业> [N] [--days D]")
+
+        return '\n'.join(lines)
+
+    async def _cmd_setphase(self, arg: str, event=None) -> str:
+        """切换当前赛季阶段，仅管理员可用"""
+        import re as _re
+        import sqlite3 as _sqlite3
+        from datetime import datetime as _dt
+        from .data_client import CURRENT_SEASON_ID
+
+        # 权限检查
+        admin_qq = self._admin_qq()
+        sender_qq = str(getattr(event, "user_id", 0) or 0)
+        if admin_qq and sender_qq not in admin_qq:
+            return "[巴扎] 仅管理员可切换阶段"
+
+        phase = arg.strip()
+        if not phase:
+            from .data_client import CURRENT_PHASE
+            return (
+                f"📋 当前阶段: {CURRENT_PHASE}\n\n"
+                "用法: #bz setphase <阶段>\n"
+                "示例: #bz setphase 17.2"
+            )
+
+        # 格式校验：必须是 数字.数字
+        if not _re.match(r'^\d+\.\d+$', phase):
+            return "[巴扎] 阶段格式错误，应为 赛季.阶段 如 17.2"
+
+        season = int(phase.split('.')[0])
+        if season != CURRENT_SEASON_ID:
+            return f"[巴扎] 阶段赛季({season})与当前赛季({CURRENT_SEASON_ID})不符"
+
+        try:
+            # 更新 data_client.py 中的 CURRENT_PHASE
+            dc_path = __import__('pathlib').Path(__file__).parent / 'data_client.py'
+            dc_text = dc_path.read_text(encoding='utf-8')
+            import re as re2
+            dc_new = re2.sub(
+                r'CURRENT_PHASE = "[^"]*"',
+                f'CURRENT_PHASE = "{phase}"',
+                dc_text
+            )
+            dc_path.write_text(dc_new, encoding='utf-8')
+
+            # 记录到 phases 表
+            conn = _sqlite3.connect('/opt/qiubot/data/bazaar_runs.db')
+            conn.execute(
+                'INSERT OR IGNORE INTO phases (season, phase, start_time) VALUES (?,?,?)',
+                [CURRENT_SEASON_ID, phase, _dt.utcnow().isoformat()]
+            )
+            conn.commit()
+            conn.close()
+
+            # 热重载本模块的 CURRENT_PHASE（让进程内立即生效）
+            import importlib
+            import plugins.bazaar_plugin.data_client as _dc
+            importlib.reload(_dc)
+
+            return (
+                f"✅ 已切换至阶段 {phase}\n"
+                f"新收集的 runs 将标记为 {phase}\n"
+                f"查询命令默认使用 {phase} 数据"
+            )
+        except Exception as e:
+            return f"[巴扎] 切换阶段失败: {e}"
+
 
 
     async def _cmd_db(self, arg: str) -> str:
