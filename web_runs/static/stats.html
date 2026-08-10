@@ -86,6 +86,11 @@ function setDays(d) {
   document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
   loadStats();
+
+// 自动刷新（每60秒）
+setInterval(() => {
+  loadStats();
+}, 60000);
 }
 
 const TAB_NAMES = {runs:'阵容查询', winrate:'胜率查询', partner:'最佳搭档', topcard:'职业榜单', feedback:'意见反馈', stats:'数据看板'};
@@ -106,7 +111,17 @@ async function loadStats() {
     if (!resp.ok) throw new Error('请求失败');
     const d = await resp.json();
     renderStats(d);
-    document.getElementById('update-time').textContent = '最后更新：' + new Date().toLocaleString('zh-CN') + '  · 统计周期：近 ' + _days + ' 天';
+    const now = new Date().toLocaleString('zh-CN');
+    document.getElementById('update-time').textContent = '最后更新：' + now + '  · 统计周期：近 ' + _days + ' 天  · 60s 后自动刷新';
+    // 倒计时
+    let countdown = 60;
+    clearInterval(window._countdownTimer);
+    window._countdownTimer = setInterval(() => {
+      countdown--;
+      const el = document.getElementById('update-time');
+      if (el) el.textContent = '最后更新：' + now + '  · 统计周期：近 ' + _days + ' 天  · ' + countdown + 's 后自动刷新';
+      if (countdown <= 0) clearInterval(window._countdownTimer);
+    }, 1000);
   } catch(e) {
     document.getElementById('main-content').innerHTML = '<div class="error-msg">加载失败: ' + e.message + '</div>';
   }
@@ -261,6 +276,11 @@ function renderStats(d) {
 }
 
 loadStats();
+
+// 自动刷新（每60秒）
+setInterval(() => {
+  loadStats();
+}, 60000);
 </script>
 </body>
 </html>
