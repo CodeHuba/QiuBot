@@ -89,6 +89,56 @@ input::placeholder{color:#4b5563}
 .topcard-bar{height:100%;border-radius:99px;transition:width .5s ease}
 .topcard-controls{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap}
 
+
+.fb-layout{display:flex;gap:20px;align-items:flex-start;margin-top:0}
+.fb-left{width:320px;flex-shrink:0}
+.fb-right{flex:1;min-width:0}
+.fb-form-card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:20px;margin-bottom:20px}
+.fb-form-title{font-size:14px;font-weight:600;color:#f59e0b;margin-bottom:14px}
+.fb-textarea{width:100%;background:#0a0e1a;border:1px solid #374151;border-radius:8px;padding:10px 12px;color:#e2e8f0;font-size:13px;resize:vertical;min-height:100px;outline:none;font-family:inherit;transition:border-color .2s}
+.fb-textarea:focus{border-color:#f59e0b}
+.fb-upload-area{border:2px dashed #374151;border-radius:8px;padding:14px;text-align:center;cursor:pointer;margin:10px 0;transition:border-color .2s;position:relative;overflow:hidden}
+.fb-upload-area:hover{border-color:#f59e0b}
+.fb-upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.fb-upload-hint{font-size:12px;color:#6b7280;pointer-events:none}
+.fb-preview{max-width:100%;max-height:120px;border-radius:6px;margin-top:8px;display:none;pointer-events:none}
+.fb-contact-input{width:100%;background:#0a0e1a;border:1px solid #374151;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;outline:none;transition:border-color .2s;margin-top:10px;box-sizing:border-box}
+.fb-contact-input:focus{border-color:#f59e0b}
+.fb-submit-btn{width:100%;margin-top:12px;padding:10px;border-radius:8px;border:none;background:#f59e0b;color:#0a0e1a;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}
+.fb-submit-btn:hover{background:#fbbf24}
+.fb-submit-btn:disabled{background:#374151;color:#6b7280;cursor:not-allowed}
+.masonry{column-count:2;column-gap:16px}
+@media(max-width:900px){.fb-layout{flex-direction:column}.fb-left{width:100%}.masonry{column-count:1}}
+@media(min-width:1400px){.masonry{column-count:3}}
+.fb-card{break-inside:avoid;background:#111827;border:1px solid #1f2937;border-radius:12px;overflow:hidden;margin-bottom:16px;display:inline-block;width:100%}
+.fb-card-img{width:100%;max-height:240px;object-fit:cover;display:block}
+.fb-card-body{padding:14px 16px}
+.fb-card-text{font-size:13px;color:#e2e8f0;line-height:1.6;word-break:break-word}
+.fb-card-contact{margin-top:8px;font-size:11px;color:#6b7280}
+.fb-card-footer{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #1f2937}
+.fb-card-time{font-size:11px;color:#4b5563;flex:1}
+.fb-like-btn{display:flex;align-items:center;gap:4px;background:transparent;border:1px solid #374151;border-radius:20px;padding:4px 10px;cursor:pointer;font-size:12px;color:#9ca3af;transition:all .2s}
+.fb-like-btn:hover,.fb-like-btn.liked{border-color:#ef4444;color:#ef4444}
+.fb-comment-btn{display:flex;align-items:center;gap:4px;background:transparent;border:none;cursor:pointer;font-size:12px;color:#6b7280;transition:color .2s;padding:4px 0}
+.fb-comment-btn:hover{color:#f59e0b}
+.fb-comments-area{padding:0 16px 14px;border-top:1px solid #1f2937;display:none}
+.fb-comment-item{padding:8px 0;border-bottom:1px solid #1a2235}
+.fb-comment-item:last-child{border-bottom:none}
+.fb-comment-content{font-size:12px;color:#d1d5db;line-height:1.5;word-break:break-word}
+.fb-comment-meta{font-size:11px;color:#4b5563;margin-top:3px;display:flex;gap:8px;align-items:center}
+.fb-reply-btn{font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;padding:0}
+.fb-reply-btn:hover{color:#f59e0b}
+.fb-comment-children{margin-left:14px;border-left:2px solid #1f2937;padding-left:10px;margin-top:4px}
+.fb-comment-form{margin-top:10px;display:flex;gap:8px}
+.fb-comment-input{flex:1;background:#0a0e1a;border:1px solid #374151;border-radius:6px;padding:7px 10px;color:#e2e8f0;font-size:12px;outline:none;transition:border-color .2s}
+.fb-comment-input:focus{border-color:#f59e0b}
+.fb-comment-submit{padding:7px 14px;border-radius:6px;border:none;background:#374151;color:#e2e8f0;font-size:12px;cursor:pointer;transition:background .2s;white-space:nowrap}
+.fb-comment-submit:hover{background:#f59e0b;color:#0a0e1a}
+.fb-load-more{display:block;width:100%;padding:10px;border-radius:8px;border:1px solid #374151;background:transparent;color:#9ca3af;font-size:13px;cursor:pointer;transition:all .2s;margin-top:4px}
+.fb-load-more:hover{border-color:#f59e0b;color:#f59e0b}
+.fb-empty{text-align:center;padding:40px;color:#6b7280;font-size:14px}
+.fb-success{background:#0a2010;border:1px solid #065f46;border-radius:8px;padding:10px 14px;color:#34d399;font-size:13px;margin-bottom:12px;display:none}
+
 </style>
 </head>
 <body>
@@ -99,6 +149,7 @@ input::placeholder{color:#4b5563}
     <button class="nav-tab" onclick="switchTab('winrate')">胜率查询</button>
     <button class="nav-tab" onclick="switchTab('partner')">最佳搭档</button>
     <button class="nav-tab" onclick="switchTab('topcard')">职业榜单</button>
+    <button class="nav-tab" onclick="switchTab('feedback')">意见反馈</button>
   </div>
 </nav>
 <div class="main">
@@ -228,14 +279,38 @@ input::placeholder{color:#4b5563}
   <div id="topcard-result"><div class="loading">加载中...</div></div>
 </div>
 
+<div id="panel-feedback" class="panel">
+  <div class="fb-layout">
+    <div class="fb-left">
+      <div class="fb-form-card">
+        <div class="fb-form-title">✍️ 提交反馈</div>
+        <div id="fb-success" class="fb-success">✅ 提交成功！</div>
+        <textarea id="fb-content" class="fb-textarea" placeholder="说说你的想法、建议或遇到的问题..." maxlength="2000"></textarea>
+        <div class="fb-upload-area">
+          <input type="file" id="fb-img-input" accept="image/*" onchange="previewImage(event)">
+          <div class="fb-upload-hint">📷 点击上传图片（可选）</div>
+          <img id="fb-preview" class="fb-preview">
+        </div>
+        <input id="fb-contact" class="fb-contact-input" placeholder="留下联系方式：微信/QQ/邮箱（可选）" maxlength="100">
+        <button class="fb-submit-btn" onclick="submitFeedback()">提交反馈</button>
+      </div>
+    </div>
+    <div class="fb-right">
+      <div id="fb-list" class="masonry"></div>
+      <button id="fb-loadmore" class="fb-load-more" style="display:none" onclick="loadMoreFeedback()">加载更多</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const HEROES = {凡妮莎:'Vanessa',杜利:'Dooley',马克:'Mak',皮格:'Pygmalien',斯黛拉:'Stelle',朱尔斯:'Jules',卡诺克:'Karnok'};
 let lastQuery = 0;
 
 function switchTab(tab) {
   if (tab === "topcard" && !window._topcardLoaded) { setTimeout(loadTopcard, 0); }
+  if (tab === "feedback" && !_fbLoaded) { setTimeout(() => loadFeedback(true), 0); }
   document.querySelectorAll('.nav-tab').forEach((t,i)=>{
-    t.classList.toggle('active', ['runs','winrate','partner','topcard'][i]===tab);
+    t.classList.toggle('active', ['runs','winrate','partner','topcard','feedback'][i]===tab);
   });
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+tab).classList.add('active');
@@ -535,6 +610,199 @@ async function loadTopcard() {
     el.innerHTML = '<div class="error-msg">加载失败: ' + e.message + '</div>';
   }
 }
+
+let _fbPage = 1, _fbLoaded = false;
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+function maskContact(s) {
+  if (!s) return '';
+  s = s.trim();
+  if (s.includes('@')) {
+    const at = s.indexOf('@');
+    const local = s.slice(0, at);
+    const domain = s.slice(at);
+    if (local.length <= 2) return local[0] + '***' + domain;
+    return local[0] + '***' + local.slice(-1) + domain;
+  }
+  if (/^\d+$/.test(s)) {
+    if (s.length <= 4) return s[0] + '***';
+    return s.slice(0, 2) + '***' + s.slice(-2);
+  }
+  if (s.length <= 3) return s[0] + '***';
+  return s.slice(0, 2) + '***' + s.slice(-1);
+}
+
+function previewImage(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('fb-preview');
+    img.src = ev.target.result;
+    img.style.display = 'block';
+    document.querySelector('.fb-upload-hint').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function submitFeedback() {
+  const content = document.getElementById('fb-content').value.trim();
+  if (!content) { alert('请输入内容'); return; }
+  const fd = new FormData();
+  fd.append('content', content);
+  const contact = document.getElementById('fb-contact').value.trim();
+  if (contact) fd.append('contact', contact);
+  const fileInput = document.getElementById('fb-img-input');
+  if (fileInput.files[0]) fd.append('image', fileInput.files[0]);
+  const btn = document.querySelector('.fb-submit-btn');
+  btn.disabled = true; btn.textContent = '提交中...';
+  try {
+    const resp = await fetch('/api/feedback', {method:'POST', body:fd});
+    if (!resp.ok) { const e = await resp.json(); throw new Error(e.error || '提交失败'); }
+    document.getElementById('fb-success').style.display = 'block';
+    setTimeout(() => document.getElementById('fb-success').style.display = 'none', 3000);
+    document.getElementById('fb-content').value = '';
+    document.getElementById('fb-contact').value = '';
+    document.getElementById('fb-preview').style.display = 'none';
+    document.querySelector('.fb-upload-hint').style.display = '';
+    fileInput.value = '';
+    _fbPage = 1; await loadFeedback(true);
+  } catch(e) { alert(e.message); }
+  finally { btn.disabled = false; btn.textContent = '提交反馈'; }
+}
+
+async function loadFeedback(reset) {
+  if (reset) _fbPage = 1;
+  try {
+    const resp = await fetch('/api/feedback?page=' + _fbPage);
+    const data = await resp.json();
+    const list = document.getElementById('fb-list');
+    if (reset) list.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+      if (reset) list.innerHTML = '<div class="fb-empty">还没有反馈，快来抢沙发吧！</div>';
+      document.getElementById('fb-loadmore').style.display = 'none';
+      return;
+    }
+    data.items.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'fb-card'; card.dataset.id = item.id;
+      const imgHtml = item.image_path ? '<img class="fb-card-img" src="' + item.image_path + '" loading="lazy">' : '';
+      const contactHtml = item.contact ? '<div class="fb-card-contact">📬 ' + maskContact(escapeHtml(item.contact)) + '</div>' : '';
+      const time = new Date(item.created_at + (item.created_at.includes('+') ? '' : ' UTC')).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      card.innerHTML = imgHtml +
+        '<div class="fb-card-body">' +
+          '<div class="fb-card-text">' + escapeHtml(item.content) + '</div>' +
+          contactHtml +
+          '<div class="fb-card-footer">' +
+            '<span class="fb-card-time">' + time + '</span>' +
+            '<button class="fb-like-btn" onclick="likeFeedback(' + item.id + ',this)">❤️ <span>' + item.likes + '</span></button>' +
+            '<button class="fb-comment-btn" onclick="toggleComments(' + item.id + ')">💬 评论</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="fb-comments-area" id="comments-' + item.id + '"></div>';
+      list.appendChild(card);
+    });
+    _fbPage++;
+    document.getElementById('fb-loadmore').style.display = (data.page < data.pages) ? 'block' : 'none';
+    _fbLoaded = true;
+  } catch(e) { console.error(e); }
+}
+
+async function likeFeedback(id, btn) {
+  if (btn.classList.contains('liked')) return;
+  try {
+    const resp = await fetch('/api/feedback/' + id + '/like', {method:'POST'});
+    const data = await resp.json();
+    btn.querySelector('span').textContent = data.likes;
+    btn.classList.add('liked');
+  } catch(e) {}
+}
+
+async function toggleComments(id) {
+  const area = document.getElementById('comments-' + id);
+  if (area.style.display === 'block') { area.style.display = 'none'; return; }
+  area.style.display = 'block';
+  if (area.dataset.loaded) return;
+  try {
+    const resp = await fetch('/api/feedback/' + id + '/comments');
+    const comments = await resp.json();
+    area.innerHTML =
+      '<div id="cmtlist-' + id + '"></div>' +
+      '<div class="fb-comment-form">' +
+        '<input class="fb-comment-input" placeholder="说点什么..." id="cmtinput-' + id + '" ' +
+        'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();postComment(' + id + ',null)}">' +
+        '<button class="fb-comment-submit" onclick="postComment(' + id + ',null)">发送</button>' +
+      '</div>';
+    renderComments(id, comments, null, document.getElementById('cmtlist-' + id));
+    area.dataset.loaded = 'true';
+  } catch(e) {}
+}
+
+function renderComments(fbId, allComments, parentId, container) {
+  const children = allComments.filter(c => c.parent_id === parentId);
+  children.forEach(c => {
+    const time = new Date(c.created_at + (c.created_at.includes('+') ? '' : ' UTC')).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const div = document.createElement('div');
+    div.className = 'fb-comment-item'; div.id = 'cmt-' + c.id;
+    div.innerHTML =
+      '<div class="fb-comment-content">' + escapeHtml(c.content) + '</div>' +
+      '<div class="fb-comment-meta">' +
+        '<span>' + time + '</span>' +
+        '<button class="fb-reply-btn" onclick="startReply(' + fbId + ',' + c.id + ')">回复</button>' +
+      '</div>' +
+      '<div class="fb-comment-children" id="children-' + c.id + '"></div>';
+    container.appendChild(div);
+    renderComments(fbId, allComments, c.id, document.getElementById('children-' + c.id));
+  });
+}
+
+function startReply(fbId, parentId) {
+  const existing = document.getElementById('reply-form-' + parentId);
+  if (existing) { existing.remove(); return; }
+  const cmt = document.getElementById('cmt-' + parentId);
+  if (!cmt) return;
+  const form = document.createElement('div');
+  form.id = 'reply-form-' + parentId;
+  form.className = 'fb-comment-form';
+  form.style.marginTop = '6px';
+  form.innerHTML =
+    '<input class="fb-comment-input" placeholder="回复..." id="replyinput-' + parentId + '" ' +
+    'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();postComment(' + fbId + ',' + parentId + ')}">' +
+    '<button class="fb-comment-submit" onclick="postComment(' + fbId + ',' + parentId + ')">发送</button>';
+  cmt.appendChild(form);
+  document.getElementById('replyinput-' + parentId).focus();
+}
+
+async function postComment(fbId, parentId) {
+  const inputId = parentId ? 'replyinput-' + parentId : 'cmtinput-' + fbId;
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) return;
+  try {
+    const resp = await fetch('/api/feedback/' + fbId + '/comments', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content, parent_id: parentId || null})
+    });
+    if (!resp.ok) throw new Error('发送失败');
+    const cmt = await resp.json();
+    input.value = '';
+    if (parentId) {
+      const form = document.getElementById('reply-form-' + parentId);
+      if (form) form.remove();
+      const childrenEl = document.getElementById('children-' + parentId);
+      if (childrenEl) renderComments(fbId, [cmt], parentId, childrenEl);
+    } else {
+      const list = document.getElementById('cmtlist-' + fbId);
+      if (list) renderComments(fbId, [cmt], null, list);
+    }
+  } catch(e) { alert(e.message); }
+}
+
+function loadMoreFeedback() { loadFeedback(false); }
 
 </script>
 </body>

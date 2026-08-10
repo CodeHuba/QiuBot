@@ -295,6 +295,129 @@ def api_topcard():
         _log_query('topcard', {'hero': hero}, ip, 0, False)
         return jsonify({'error': str(e)}), 500
 
+
+# ===== Feedback API =====
+FEEDBACK_DB = '/opt/qiubot/data/feedback.db'
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def _fb_conn():
+    import sqlite3 as _sl
+    c = _sl.connect(FEEDBACK_DB)
+    c.row_factory = _sl.Row
+    return c
+
+def _allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
+
+@app.route('/api/feedback', methods=['GET'])
+def api_feedback_list():
+    page = int(request.args.get('page', 1))
+    per = 20
+    offset = (page - 1) * per
+    try:
+        conn = _fb_conn()
+        rows = conn.execute(
+            'SELECT * FROM feedback ORDER BY likes DESC, created_at DESC LIMIT ? OFFSET ?',
+            (per, offset)
+        ).fetchall()
+        total = conn.execute('SELECT COUNT(*) FROM feedback').fetchone()[0]
+        conn.close()
+        return jsonify({
+            'items': [dict(r) for r in rows],
+            'total': total,
+            'page': page,
+            'pages': (total + per - 1) // per
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/feedback', methods=['POST'])
+def api_feedback_post():
+    import uuid, werkzeug.utils
+    content = request.form.get('content', '').strip()
+    contact = request.form.get('contact', '').strip()
+    if not content:
+        return jsonify({'error': '内容不能为空'}), 400
+    if len(content) > 2000:
+        return jsonify({'error': '内容不能超过2000字'}), 400
+
+    image_path = None
+    file = request.files.get('image')
+    if file and file.filename and _allowed_file(file.filename):
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        fname = str(uuid.uuid4()) + '.' + ext
+        file.save(os.path.join(UPLOAD_DIR, fname))
+        image_path = '/static/uploads/' + fname
+
+    try:
+        conn = _fb_conn()
+        cur = conn.execute(
+            'INSERT INTO feedback (content, image_path, contact) VALUES (?, ?, ?)',
+            (content, image_path, contact or None)
+        )
+        fid = cur.lastrowid
+        conn.commit()
+        row = conn.execute('SELECT * FROM feedback WHERE id=?', (fid,)).fetchone()
+        conn.close()
+        return jsonify(dict(row)), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/feedback/<int:fid>/like', methods=['POST'])
+def api_feedback_like(fid):
+    try:
+        conn = _fb_conn()
+        conn.execute('UPDATE feedback SET likes = likes + 1 WHERE id = ?', (fid,))
+        conn.commit()
+        likes = conn.execute('SELECT likes FROM feedback WHERE id = ?', (fid,)).fetchone()
+        conn.close()
+        if not likes:
+            return jsonify({'error': 'not found'}), 404
+        return jsonify({'likes': likes[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/feedback/<int:fid>/comments', methods=['GET'])
+def api_comments_get(fid):
+    try:
+        conn = _fb_conn()
+        rows = conn.execute(
+            'SELECT * FROM comments WHERE feedback_id = ? ORDER BY created_at ASC', (fid,)
+        ).fetchall()
+        conn.close()
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/feedback/<int:fid>/comments', methods=['POST'])
+def api_comments_post(fid):
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or '').strip()
+    parent_id = data.get('parent_id')
+    if not content:
+        return jsonify({'error': '评论不能为空'}), 400
+    if len(content) > 500:
+        return jsonify({'error': '评论不能超过500字'}), 400
+    try:
+        conn = _fb_conn()
+        exists = conn.execute('SELECT id FROM feedback WHERE id=?', (fid,)).fetchone()
+        if not exists:
+            conn.close()
+            return jsonify({'error': 'not found'}), 404
+        cur = conn.execute(
+            'INSERT INTO comments (feedback_id, parent_id, content) VALUES (?, ?, ?)',
+            (fid, parent_id or None, content)
+        )
+        cid = cur.lastrowid
+        conn.commit()
+        row = conn.execute('SELECT * FROM comments WHERE id=?', (cid,)).fetchone()
+        conn.close()
+        return jsonify(dict(row)), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
