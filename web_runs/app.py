@@ -275,6 +275,26 @@ def api_ingest():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/topcard', methods=['GET'])
+def api_topcard():
+    from plugins.bazaar_plugin.runs_query import RunsQuery
+    hero = request.args.get('hero', '').strip()
+    top_n = min(int(request.args.get('top', 5)), 30)
+    days = request.args.get('days')
+    if days:
+        days = int(days)
+    all_phases = request.args.get('all_phases') == 'true'
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    try:
+        query = RunsQuery()
+        result = query.topcard(hero=hero, top_n=top_n, days=days, all_phases=all_phases)
+        _log_query('topcard', {'hero': hero, 'top': top_n, 'days': days, 'all_phases': all_phases}, ip, len(result.get('top', [])), True)
+        return jsonify(result)
+    except Exception as e:
+        _log_query('topcard', {'hero': hero}, ip, 0, False)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
