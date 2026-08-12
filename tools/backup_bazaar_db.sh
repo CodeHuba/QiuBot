@@ -3,7 +3,7 @@
 # 保留最近 7 天备份
 
 DB="/opt/qiubot/data/bazaar_runs.db"
-BACKUP_DIR="/opt/qiubot/data/backups"
+BACKUP_DIR="/data0809/qiubot/backups"
 DATE=$(date +%Y%m%d)
 BACKUP="$BACKUP_DIR/bazaar_runs.$DATE.db"
 LOG="/opt/qiubot/logs/backup.log"
