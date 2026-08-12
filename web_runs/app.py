@@ -9,6 +9,8 @@ import json
 import sqlite3 as _sqlite3
 from datetime import datetime
 from collections import defaultdict
+from dotenv import load_dotenv
+load_dotenv("/opt/qiubot/.env")
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory, send_file, abort, Response
 
@@ -645,7 +647,7 @@ def index():
 @app.route('/admin/stats')
 def stats_dashboard():
     auth = request.authorization
-    if not auth or auth.password != 'qq593426711':
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
         return Response(
             'Unauthorized',
             401,
