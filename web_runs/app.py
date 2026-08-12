@@ -96,6 +96,34 @@ def _init_stats_tables():
         created_at TEXT NOT NULL
     )''')
 
+    # 冷知识问答
+    conn.execute('''CREATE TABLE IF NOT EXISTS trivia (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        question TEXT NOT NULL,
+        description TEXT,
+        answer TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        author_name TEXT,
+        author_contact TEXT,
+        upvotes INTEGER NOT NULL DEFAULT 0,
+        downvotes INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        published_at TEXT,
+        updated_at TEXT
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_trivia_status ON trivia(status)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_trivia_published_at ON trivia(published_at)')
+
+    conn.execute('''CREATE TABLE IF NOT EXISTS trivia_votes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trivia_id INTEGER NOT NULL,
+        fingerprint TEXT NOT NULL,
+        vote_type TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(trivia_id, fingerprint)
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_trivia_votes_trivia ON trivia_votes(trivia_id)')
+
     conn.commit()
     conn.close()
 
@@ -657,6 +685,10 @@ def index():
 def support():
     return send_from_directory('static', 'support.html')
 
+@app.route('/trivia')
+def trivia():
+    return send_from_directory('static', 'trivia.html')
+
 # ===== Supporters API =====
 
 @app.route('/api/supporters', methods=['GET'])
@@ -751,7 +783,201 @@ def admin_delete_supporter(sid):
     conn.close()
     return jsonify({'ok': True})
 
+# ===== Trivia API =====
+
+@app.route('/api/trivia', methods=['GET'])
+def get_trivia():
+    """公开接口：返回已发布的冷知识列表"""
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    # 排序：置顶 > 热度(upvotes-downvotes) > 时间倒序
+    rows = conn.execute('''
+        SELECT id, question, description, answer, upvotes, downvotes, published_at, updated_at
+        FROM trivia 
+        WHERE status IN ('published', 'pinned')
+        ORDER BY 
+            CASE status WHEN 'pinned' THEN 0 ELSE 1 END,
+            (upvotes - downvotes) DESC,
+            published_at DESC
+    ''').fetchall()
+    conn.close()
+    return jsonify({'trivia': [
+        {
+            'id': r[0], 'question': r[1], 'description': r[2], 'answer': r[3],
+            'upvotes': r[4], 'downvotes': r[5], 'publishedAt': r[6], 'updatedAt': r[7]
+        }
+        for r in rows
+    ]})
+
+@app.route('/api/trivia', methods=['POST'])
+def submit_trivia():
+    """用户提交问题"""
+    data = request.get_json() or {}
+    question = (data.get('question') or '').strip()
+    if not question:
+        return jsonify({'error': '问题不能为空'}), 400
+    description = (data.get('description') or '').strip()
+    author_name = (data.get('authorName') or '').strip()
+    author_contact = (data.get('authorContact') or '').strip()
+    
+    import sqlite3 as _sl
+    from datetime import datetime
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    cur = conn.execute(
+        'INSERT INTO trivia (question, description, author_name, author_contact, status, created_at) VALUES (?,?,?,?,?,?)',
+        (question, description, author_name, author_contact, 'pending', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'id': new_id, 'message': '提交成功，等待审核'}), 201
+
+@app.route('/api/trivia/<int:tid>/vote', methods=['POST'])
+def vote_trivia(tid):
+    """点赞/点踩"""
+    data = request.get_json() or {}
+    vote_type = data.get('voteType')
+    if vote_type not in ('upvote', 'downvote'):
+        return jsonify({'error': '无效的投票类型'}), 400
+    
+    fingerprint = data.get('fingerprint', '')
+    if not fingerprint:
+        return jsonify({'error': '缺少指纹'}), 400
+    
+    import sqlite3 as _sl
+    from datetime import datetime
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    
+    # 检查是否已投票
+    existing = conn.execute(
+        'SELECT vote_type FROM trivia_votes WHERE trivia_id=? AND fingerprint=?',
+        (tid, fingerprint)
+    ).fetchone()
+    
+    if existing:
+        old_type = existing[0]
+        if old_type == vote_type:
+            conn.close()
+            return jsonify({'message': '已投过此票'}), 200
+        # 改票：撤销旧票，投新票
+        conn.execute('DELETE FROM trivia_votes WHERE trivia_id=? AND fingerprint=?', (tid, fingerprint))
+        if old_type == 'upvote':
+            conn.execute('UPDATE trivia SET upvotes = upvotes - 1 WHERE id=?', (tid,))
+        else:
+            conn.execute('UPDATE trivia SET downvotes = downvotes - 1 WHERE id=?', (tid,))
+    
+    # 记录新投票
+    conn.execute(
+        'INSERT INTO trivia_votes (trivia_id, fingerprint, vote_type, created_at) VALUES (?,?,?,?)',
+        (tid, fingerprint, vote_type, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    )
+    if vote_type == 'upvote':
+        conn.execute('UPDATE trivia SET upvotes = upvotes + 1 WHERE id=?', (tid,))
+    else:
+        conn.execute('UPDATE trivia SET downvotes = downvotes + 1 WHERE id=?', (tid,))
+    
+    conn.commit()
+    # 返回最新计数
+    row = conn.execute('SELECT upvotes, downvotes FROM trivia WHERE id=?', (tid,)).fetchone()
+    conn.close()
+    return jsonify({'upvotes': row[0] if row else 0, 'downvotes': row[1] if row else 0})
+
+@app.route('/api/admin/trivia', methods=['GET'])
+def admin_list_trivia():
+    """管理接口：返回全部冷知识（含待审核）"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    rows = conn.execute('''
+        SELECT id, question, description, answer, status, author_name, author_contact, 
+               upvotes, downvotes, created_at, published_at, updated_at
+        FROM trivia 
+        ORDER BY 
+            CASE status WHEN 'pinned' THEN 0 WHEN 'published' THEN 1 ELSE 2 END,
+            created_at DESC
+    ''').fetchall()
+    conn.close()
+    return jsonify({'trivia': [
+        {
+            'id': r[0], 'question': r[1], 'description': r[2], 'answer': r[3],
+            'status': r[4], 'authorName': r[5], 'authorContact': r[6],
+            'upvotes': r[7], 'downvotes': r[8],
+            'createdAt': r[9], 'publishedAt': r[10], 'updatedAt': r[11]
+        }
+        for r in rows
+    ]})
+
+@app.route('/api/admin/trivia/<int:tid>', methods=['PUT'])
+def admin_update_trivia(tid):
+    """管理员编辑/审核/置顶"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    data = request.get_json() or {}
+    
+    import sqlite3 as _sl
+    from datetime import datetime
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    row = conn.execute('SELECT id, status FROM trivia WHERE id=?', (tid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': '不存在'}), 404
+    
+    old_status = row[1]
+    question = data.get('question')
+    description = data.get('description')
+    answer = data.get('answer')
+    status = data.get('status')
+    
+    updates = []
+    params = []
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    if question is not None:
+        updates.append('question=?')
+        params.append(question.strip())
+    if description is not None:
+        updates.append('description=?')
+        params.append(description.strip())
+    if answer is not None:
+        updates.append('answer=?')
+        params.append(answer.strip())
+        updates.append('updated_at=?')
+        params.append(now)
+    if status and status in ('pending', 'published', 'pinned'):
+        updates.append('status=?')
+        params.append(status)
+        # 首次发布时记录时间
+        if old_status == 'pending' and status in ('published', 'pinned'):
+            updates.append('published_at=?')
+            params.append(now)
+    
+    if updates:
+        params.append(tid)
+        conn.execute(f'UPDATE trivia SET {", ".join(updates)} WHERE id=?', tuple(params))
+        conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/trivia/<int:tid>', methods=['DELETE'])
+def admin_delete_trivia(tid):
+    """删除冷知识"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    conn.execute('DELETE FROM trivia WHERE id=?', (tid,))
+    conn.execute('DELETE FROM trivia_votes WHERE trivia_id=?', (tid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
 # ===== Admin Stats =====
+
+@app.route('/admin/stats')# ===== Admin Stats =====
 
 @app.route('/admin/stats')
 def stats_dashboard():

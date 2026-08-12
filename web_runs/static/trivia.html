@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>冷知识 - 巴扎丘Bot</title>
+<meta name="description" content="The Bazaar 游戏冷知识问答，由社区驱动的数据洞察。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐉</text></svg>">
+<!-- marked.js for Markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+  --bg-deep: #090A2A;
+  --bg-surface: #171047;
+  --bg-panel: #15133B;
+  --neon-magenta: #F438B8;
+  --neon-cyan: #26D9F2;
+  --neon-violet: #8A4DFF;
+  --neon-teal: #36E3C1;
+  --neon-coral: #FF536A;
+  --neon-gold: #F5C76A;
+  --text-primary: #F5F4FF;
+  --text-secondary: #B5B3D7;
+  --glow-magenta: 0 0 20px rgba(244,56,184,0.5);
+  --glow-cyan: 0 0 20px rgba(38,217,242,0.5);
+  --glow-violet: 0 0 16px rgba(138,77,255,0.4);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-deep);
+  background-image:
+    linear-gradient(rgba(138,77,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(138,77,255,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+body::before {
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(38,217,242,0.02) 2px,rgba(38,217,242,0.02) 4px);
+  pointer-events:none;z-index:1;
+}
+
+/* ===== 导航 ===== */
+.navbar {
+  background: var(--bg-surface);
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta)) 1;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  gap: 32px;
+  box-shadow: 0 4px 24px rgba(244,56,184,0.15);
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--neon-magenta);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  text-shadow: var(--glow-magenta);
+  text-decoration: none;
+}
+
+.logo::before {
+  content:'⚡';
+  margin-right: 6px;
+  color: var(--neon-cyan);
+  text-shadow: var(--glow-cyan);
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nav-tab {
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  background: transparent;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  text-decoration: none;
+  display: inline-block;
+  font-family: inherit;
+}
+
+.nav-tab:hover {
+  color: var(--text-primary);
+  border-color: rgba(38,217,242,0.4);
+  background: rgba(38,217,242,0.08);
+}
+
+.nav-tab.active {
+  color: var(--text-primary);
+  background: linear-gradient(135deg, rgba(245,199,106,0.15), rgba(138,77,255,0.15));
+  border-color: var(--neon-gold);
+  box-shadow: 0 0 20px rgba(245,199,106,0.3);
+  position: relative;
+}
+
+.nav-tab.active::after {
+  content:'';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-gold), var(--neon-violet));
+}
+
+/* ===== 主容器 ===== */
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+  position: relative;
+  z-index: 2;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 32px;
+  align-items: start;
+}
+
+/* ===== 页面头部 ===== */
+.page-header {
+  margin-bottom: 32px;
+}
+
+.page-title {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.page-title span {
+  color: var(--neon-gold);
+  text-shadow: 0 0 20px rgba(245,199,106,0.5);
+}
+
+.page-desc {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.page-header::after {
+  content:'';
+  display: block;
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-gold), var(--neon-violet));
+  margin-top: 20px;
+  border-radius: 2px;
+}
+
+/* ===== 冷知识卡片 ===== */
+.trivia-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 金色主边框 + 紫色角标 */
+.trivia-card {
+  background: var(--bg-panel);
+  border: 1px solid rgba(245,199,106,0.3);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.trivia-card::before {
+  content:'';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  background: var(--neon-violet);
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  border-radius: 0 8px 0 0;
+  z-index: 1;
+}
+
+.trivia-card:hover {
+  border-color: rgba(245,199,106,0.6);
+  box-shadow: 0 0 20px rgba(245,199,106,0.1);
+}
+
+.trivia-card.pinned {
+  border-color: rgba(245,199,106,0.6);
+  box-shadow: 0 0 24px rgba(245,199,106,0.12);
+}
+
+/* 置顶标签 */
+.pin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(245,199,106,0.15);
+  border: 1px solid rgba(245,199,106,0.4);
+  color: var(--neon-gold);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-left: 8px;
+}
+
+/* 问题头部（可点击） */
+.trivia-header {
+  padding: 16px 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.trivia-header:hover {
+  background: rgba(245,199,106,0.04);
+}
+
+.trivia-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--neon-gold);
+  opacity: 0.5;
+  white-space: nowrap;
+  padding-top: 2px;
+  min-width: 24px;
+}
+
+.trivia-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.trivia-question {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.trivia-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.trivia-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.trivia-date {
+  font-size: 11px;
+  color: rgba(181,179,215,0.45);
+}
+
+.answer-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.has-answer {
+  color: var(--neon-teal);
+  background: rgba(54,227,193,0.08);
+  border: 1px solid rgba(54,227,193,0.2);
+}
+
+.no-answer {
+  color: rgba(181,179,215,0.4);
+  background: rgba(138,77,255,0.05);
+  border: 1px solid rgba(138,77,255,0.12);
+}
+
+/* 展开箭头 */
+.expand-arrow {
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.trivia-card.expanded .expand-arrow {
+  transform: rotate(180deg);
+  color: var(--neon-gold);
+}
+
+/* 投票按钮 */
+.vote-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(138,77,255,0.2);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.vote-btn:hover {
+  border-color: rgba(54,227,193,0.5);
+  color: var(--neon-teal);
+  background: rgba(54,227,193,0.08);
+}
+
+.vote-btn.active-up {
+  border-color: var(--neon-teal);
+  color: var(--neon-teal);
+  background: rgba(54,227,193,0.12);
+}
+
+.vote-btn.active-down {
+  border-color: var(--neon-coral);
+  color: var(--neon-coral);
+  background: rgba(255,83,106,0.1);
+}
+
+/* 答案内容（手风琴） */
+.trivia-answer {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease;
+}
+
+.trivia-answer > * {
+  overflow: hidden;
+}
+
+.trivia-card.expanded .trivia-answer {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.trivia-answer-inner {
+  padding: 0 20px 20px 56px;
+  border-top: 1px solid rgba(245,199,106,0.12);
+  padding-top: 20px;
+  margin-top: 0;
+}
+
+/* Markdown 内容样式 */
+.md-content {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+.md-content h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--neon-gold);
+  margin: 16px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(245,199,106,0.15);
+}
+
+.md-content h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--neon-cyan);
+  margin: 14px 0 6px;
+}
+
+.md-content p {
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+}
+
+.md-content strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.md-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.md-content th {
+  background: rgba(138,77,255,0.15);
+  color: var(--neon-violet);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 700;
+  border: 1px solid rgba(138,77,255,0.2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.md-content td {
+  padding: 8px 12px;
+  border: 1px solid rgba(138,77,255,0.12);
+  color: var(--text-secondary);
+}
+
+.md-content tr:hover td {
+  background: rgba(138,77,255,0.06);
+  color: var(--text-primary);
+}
+
+.md-content code {
+  background: rgba(38,217,242,0.08);
+  border: 1px solid rgba(38,217,242,0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--neon-cyan);
+  font-family: 'Courier New', monospace;
+}
+
+.md-content blockquote {
+  border-left: 3px solid var(--neon-gold);
+  padding: 8px 16px;
+  margin: 10px 0;
+  background: rgba(245,199,106,0.05);
+  border-radius: 0 4px 4px 0;
+}
+
+.md-content ul, .md-content ol {
+  padding-left: 20px;
+  margin-bottom: 10px;
+}
+
+.md-content li {
+  margin-bottom: 4px;
+}
+
+.md-content hr {
+  border: none;
+  border-top: 1px solid rgba(138,77,255,0.15);
+  margin: 16px 0;
+}
+
+.answer-source {
+  font-size: 11px;
+  color: rgba(181,179,215,0.35);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(138,77,255,0.1);
+}
+
+/* ===== 空状态 / 加载 ===== */
+.loading-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.loading-state::before {
+  content:'⚡';
+  display: block;
+  font-size: 32px;
+  margin-bottom: 12px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,100%{opacity:1}
+  50%{opacity:0.3}
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.empty-state::before {
+  content:'💡';
+  display: block;
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+/* ===== 提问卡片（右侧） ===== */
+.ask-card {
+  background: var(--bg-panel);
+  border: 1px solid rgba(138,77,255,0.35);
+  border-radius: 8px;
+  padding: 24px;
+  position: sticky;
+  top: 80px;
+  position: relative;
+}
+
+.ask-card::before {
+  content:'';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  background: var(--neon-cyan);
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  border-radius: 0 8px 0 0;
+}
+
+.ask-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--neon-violet);
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ask-title::before {
+  content:'';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: var(--neon-violet);
+  border-radius: 2px;
+  box-shadow: var(--glow-violet);
+}
+
+.form-field {
+  margin-bottom: 12px;
+}
+
+.form-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+
+.form-field input,
+.form-field textarea {
+  width: 100%;
+  background: rgba(9,10,42,0.8);
+  border: 1px solid rgba(138,77,255,0.25);
+  border-radius: 6px;
+  padding: 9px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s;
+  resize: none;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+  border-color: var(--neon-violet);
+  box-shadow: 0 0 0 2px rgba(138,77,255,0.12);
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: rgba(181,179,215,0.35);
+}
+
+.btn-ask {
+  width: 100%;
+  padding: 11px;
+  border-radius: 6px;
+  border: none;
+  background: linear-gradient(135deg, var(--neon-violet), var(--neon-magenta));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  box-shadow: 0 4px 16px rgba(138,77,255,0.35);
+  margin-top: 4px;
+}
+
+.btn-ask:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(138,77,255,0.5);
+  filter: brightness(1.08);
+}
+
+.btn-ask:disabled {
+  background: rgba(138,77,255,0.2);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+.ask-hint {
+  font-size: 11px;
+  color: rgba(181,179,215,0.4);
+  margin-top: 10px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.ask-success {
+  display: none;
+  background: rgba(54,227,193,0.1);
+  border: 1px solid rgba(54,227,193,0.3);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--neon-teal);
+  font-size: 13px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ===== Footer ===== */
+footer {
+  margin-top: 60px;
+  padding: 30px 20px;
+  border-top: 1px solid rgba(138,77,255,0.2);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+footer a {
+  color: var(--neon-cyan);
+  text-decoration: none;
+  margin: 0 15px;
+  transition: color 0.2s;
+}
+
+footer a:hover {
+  color: var(--neon-teal);
+}
+
+/* ===== 移动端 ===== */
+@media (max-width: 768px) {
+  .navbar {
+    height: auto;
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .nav-tabs {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 6px;
+  }
+
+  .nav-tabs::-webkit-scrollbar { display: none; }
+
+  .nav-tab {
+    font-size: 13px;
+    padding: 8px 14px;
+    flex-shrink: 0;
+  }
+
+  .main { padding: 32px 12px 60px; }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ask-card {
+    position: static;
+    order: -1;
+  }
+
+  .trivia-answer-inner {
+    padding: 16px;
+  }
+
+  .page-title { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <a href="/" class="logo">巴扎丘Bot</a>
+  <div class="nav-tabs">
+    <a href="/" class="nav-tab">阵容查询</a>
+    <a href="/" class="nav-tab">胜率查询</a>
+    <a href="/" class="nav-tab">最佳搭档</a>
+    <a href="/" class="nav-tab">职业榜单</a>
+    <a href="/" class="nav-tab">意见反馈</a>
+    <a href="/support" class="nav-tab">支持</a>
+    <a href="/trivia" class="nav-tab active">冷知识</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1 class="page-title">巴扎 <span>冷知识</span></h1>
+    <p class="page-desc">由玩家驱动的数据洞察，解答你在游戏中遇到的疑惑。</p>
+  </div>
+
+  <div class="layout">
+    <!-- 左侧：冷知识列表 -->
+    <div>
+      <div id="trivia-list">
+        <div class="loading-state">加载中...</div>
+      </div>
+    </div>
+
+    <!-- 右侧：提问卡片 -->
+    <div>
+      <div class="ask-card">
+        <div class="ask-title">提个问题</div>
+        <div class="form-field">
+          <label>问题 <span style="color:var(--neon-coral)">*</span></label>
+          <textarea id="ask-question" placeholder="你的问题是什么？" rows="3" maxlength="200"></textarea>
+        </div>
+        <div class="form-field">
+          <label>补充说明（可选）</label>
+          <textarea id="ask-desc" placeholder="可以提供更多背景信息..." rows="2" maxlength="500"></textarea>
+        </div>
+        <div class="form-field">
+          <label>昵称（可选）</label>
+          <input type="text" id="ask-name" placeholder="你的名字" maxlength="30">
+        </div>
+        <div class="form-field">
+          <label>联系方式（可选）</label>
+          <input type="text" id="ask-contact" placeholder="微信/QQ/邮箱" maxlength="100">
+        </div>
+        <button class="btn-ask" id="btn-ask" onclick="submitAsk()">提交问题</button>
+        <div class="ask-success" id="ask-success">✅ 提交成功！问题审核后将会展示。</div>
+        <p class="ask-hint">提交的问题需要审核后才会展示<br>管理员答复后你将在此页面看到答案</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div style="margin-bottom:12px">
+    <a href="/static/privacy.html" target="_blank">隐私政策</a>
+    <span style="color:#4b5563;margin:0 5px">|</span>
+    <a href="https://github.com/CodeHuba/QiuBot" target="_blank">GitHub</a>
+    <span style="color:#4b5563;margin:0 5px">|</span>
+    <span style="color:#6b7280;margin:0 15px">反馈QQ群：<a href="https://qm.qq.com/q/1102189995" target="_blank" style="color:var(--neon-coral)">1102189995</a></span>
+  </div>
+  <div style="color:#4b5563">
+    <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#4b5563;text-decoration:none">浙ICP备XXXXXXXX号-X</a>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:#4b5563">© 2026 BazaarQiuBot - The Bazaar 中文社区数据服务</div>
+</footer>
+
+<script>
+/* ===== 工具 ===== */
+function getFingerprint() {
+  let fp = localStorage.getItem('_fp');
+  if (!fp) {
+    fp = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('_fp', fp);
+  }
+  return fp;
+}
+
+function formatDate(s) {
+  if (!s) return '';
+  return s.slice(0, 10);
+}
+
+/* ===== 冷知识列表 ===== */
+let triviaData = [];
+let userVotes = JSON.parse(localStorage.getItem('_trivia_votes') || '{}');
+
+async function loadTrivia() {
+  try {
+    const resp = await fetch('/api/trivia');
+    const data = await resp.json();
+    triviaData = data.trivia || [];
+    renderTrivia();
+  } catch (e) {
+    document.getElementById('trivia-list').innerHTML =
+      '<div class="empty-state" style="font-size:13px;color:var(--neon-coral)">加载失败，请刷新重试</div>';
+  }
+}
+
+function renderTrivia() {
+  const el = document.getElementById('trivia-list');
+  if (!triviaData.length) {
+    el.innerHTML = '<div class="empty-state">暂时还没有冷知识，快来提问吧！</div>';
+    return;
+  }
+
+  el.innerHTML = triviaData.map((t, i) => {
+    const pinned = t.status === 'pinned';
+    const hasAnswer = t.answer && t.answer.trim();
+    const myVote = userVotes[t.id] || null;
+
+    return `
+    <div class="trivia-card ${pinned ? 'pinned' : ''}" id="trivia-${t.id}">
+      <div class="trivia-header" onclick="toggleTrivia(${t.id})">
+        <div class="trivia-num">#${i + 1}</div>
+        <div class="trivia-meta">
+          <div class="trivia-question">
+            ${escHtml(t.question)}
+            ${pinned ? '<span class="pin-badge">📌 置顶</span>' : ''}
+          </div>
+          ${t.description ? `<div class="trivia-desc">${escHtml(t.description)}</div>` : ''}
+          <div class="trivia-footer">
+            <span class="trivia-date">${formatDate(t.publishedAt)}</span>
+            <span class="answer-indicator ${hasAnswer ? 'has-answer' : 'no-answer'}">
+              ${hasAnswer ? '✓ 已有答案' : '待解答'}
+            </span>
+            <div class="vote-bar" onclick="event.stopPropagation()">
+              <button class="vote-btn ${myVote === 'upvote' ? 'active-up' : ''}"
+                onclick="vote(${t.id}, 'upvote')" id="up-${t.id}">
+                👍 <span id="up-cnt-${t.id}">${t.upvotes}</span>
+              </button>
+              <button class="vote-btn ${myVote === 'downvote' ? 'active-down' : ''}"
+                onclick="vote(${t.id}, 'downvote')" id="dn-${t.id}">
+                👎 <span id="dn-cnt-${t.id}">${t.downvotes}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="expand-arrow">▾</div>
+      </div>
+      ${hasAnswer ? `
+      <div class="trivia-answer">
+        <div class="trivia-answer-inner">
+          <div class="md-content">${renderMd(t.answer)}</div>
+          ${t.updatedAt ? `<div class="answer-source">答案更新于 ${formatDate(t.updatedAt)}</div>` : ''}
+        </div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMd(text) {
+  if (typeof marked === 'undefined') return escHtml(text);
+  return marked.parse(text);
+}
+
+function toggleTrivia(id) {
+  const card = document.getElementById('trivia-' + id);
+  if (!card) return;
+  card.classList.toggle('expanded');
+}
+
+async function vote(id, voteType) {
+  const fp = getFingerprint();
+  try {
+    const resp = await fetch(`/api/trivia/${id}/vote`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({voteType, fingerprint: fp})
+    });
+    const data = await resp.json();
+    // 更新计数
+    const upEl = document.getElementById('up-cnt-' + id);
+    const dnEl = document.getElementById('dn-cnt-' + id);
+    if (upEl) upEl.textContent = data.upvotes;
+    if (dnEl) dnEl.textContent = data.downvotes;
+    // 更新本地记录和按钮状态
+    const prev = userVotes[id];
+    if (prev === voteType) {
+      delete userVotes[id];
+    } else {
+      userVotes[id] = voteType;
+    }
+    localStorage.setItem('_trivia_votes', JSON.stringify(userVotes));
+    // 更新按钮样式
+    const upBtn = document.getElementById('up-' + id);
+    const dnBtn = document.getElementById('dn-' + id);
+    if (upBtn) upBtn.className = 'vote-btn' + (userVotes[id] === 'upvote' ? ' active-up' : '');
+    if (dnBtn) dnBtn.className = 'vote-btn' + (userVotes[id] === 'downvote' ? ' active-down' : '');
+  } catch (e) {
+    console.error('vote failed', e);
+  }
+}
+
+/* ===== 提问 ===== */
+async function submitAsk() {
+  const question = document.getElementById('ask-question').value.trim();
+  if (!question) {
+    document.getElementById('ask-question').focus();
+    return;
+  }
+
+  const btn = document.getElementById('btn-ask');
+  btn.disabled = true;
+  btn.textContent = '提交中...';
+
+  try {
+    const resp = await fetch('/api/trivia', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        question,
+        description: document.getElementById('ask-desc').value.trim(),
+        authorName: document.getElementById('ask-name').value.trim(),
+        authorContact: document.getElementById('ask-contact').value.trim()
+      })
+    });
+
+    if (resp.ok) {
+      document.getElementById('ask-question').value = '';
+      document.getElementById('ask-desc').value = '';
+      document.getElementById('ask-name').value = '';
+      document.getElementById('ask-contact').value = '';
+      const success = document.getElementById('ask-success');
+      success.style.display = 'block';
+      setTimeout(() => success.style.display = 'none', 4000);
+    }
+  } catch (e) {
+    alert('提交失败，请重试');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交问题';
+  }
+}
+
+/* ===== 初始化 ===== */
+window.addEventListener('DOMContentLoaded', loadTrivia);
+</script>
+</body>
+</html>

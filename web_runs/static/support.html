@@ -314,7 +314,7 @@ body::before {
   z-index: 200;
   align-items: center;
   justify-content: center;
-  
+  padding: 16px;
 }
 
 .modal-overlay.open {
@@ -401,10 +401,14 @@ body::before {
 
 /* 二维码容器 */
 .qrcode-wrap {
+  background: #fff;
+  border-radius: 6px;
+  padding: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 20px;
+  /* 保持白底，不加深色滤镜 */
 }
 
 .qrcode-wrap img {
@@ -688,6 +692,7 @@ footer a:hover {
     <a href="/" class="nav-tab">职业榜单</a>
     <a href="/" class="nav-tab">意见反馈</a>
     <a href="/support" class="nav-tab active">支持</a>
+    <a href="/trivia" class="nav-tab">冷知识</a>
   </div>
 </nav>
 
@@ -750,7 +755,15 @@ footer a:hover {
     <div class="qrcode-wrap">
       <!-- 二维码图片路径 - 配置位置：/static/wechat_qr.png -->
       <!-- 有赞赏码后替换下方占位符：将 id="qr-placeholder" 整块替换为 <img src="/static/wechat_qr.png" alt="微信赞赏码" width="220" height="220"> -->
-<img src="/static/wechat_qr.png" alt="微信赞赏码" width="220" height="220" style="object-fit:contain">
+      <div class="qrcode-placeholder" id="qr-placeholder" aria-label="二维码占位，待上传微信赞赏码图片">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
+          <rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/>
+          <rect x="18" y="18" width="3" height="3"/>
+        </svg>
+        <span>赞赏码上传中</span>
+      </div>
     </div>
     <p class="modal-hint" id="modal-hint">
       如果希望出现在支持者名单中，<br>
@@ -777,7 +790,7 @@ footer a:hover {
 /* ============ 配置 ============ */
 const CONFIG = {
   qrcodePath: '/static/wechat_qr.png',   // 微信赞赏码图片路径
-  supportersAPI: '/api/supporters', // 支持者数据路径
+  supportersAPI: '/static/supporters.json', // 支持者数据路径
   maxVisible: 20,                          // 默认展示人数
 };
 
@@ -831,7 +844,7 @@ async function loadSupporters() {
   try {
     const resp = await fetch(CONFIG.supportersAPI);
     const data = await resp.json();
-    allSupporters = data.supporters || [];
+    allSupporters = (data.supporters || []).filter(s => s.visible);
     renderSupporters();
   } catch (e) {
     renderSupporters();
@@ -872,7 +885,7 @@ function toggleExpand() {
 }
 
 /* ============ 初始化 ============ */
-window.addEventListener("DOMContentLoaded", loadSupporters);
+loadSupporters();
 </script>
 </body>
 </html>

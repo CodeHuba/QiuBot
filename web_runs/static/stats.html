@@ -73,6 +73,7 @@ body{font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif;background:#
     <button class="day-btn" onclick="setDays(30)">近 30 天</button>
     <button class="day-btn" onclick="setDays(90)">近 90 天</button>
     <button class="day-btn" style="margin-left:auto;background:#8A4DFF;color:#fff;border-color:#8A4DFF" onclick="openSupportersModal()">赞赏者管理</button>
+    <button class="day-btn" style="background:#F5C76A;color:#0a0e1a;border-color:#F5C76A" onclick="openTriviaModal()">冷知识管理</button>
   </div>
 
   <div id="main-content"><div class="loading">加载中...</div></div>
@@ -596,6 +597,267 @@ async function deleteSupporter(id) {
     const resp = await fetch(`/api/admin/supporters/${id}`, {method: 'DELETE'});
     if (resp.ok) loadSupporters();
   } catch (e) {
+    alert('删除失败');
+  }
+}
+</script>
+
+
+<!-- 冷知识管理模态框 -->
+<div class="modal-overlay" id="trivia-modal">
+  <div class="modal" style="max-width:800px">
+    <div class="modal-header">
+      <h3>冷知识管理</h3>
+      <button class="modal-close" onclick="closeTriviaModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn-primary" style="background:#F5C76A;color:#0a0e1a" onclick="showTriviaAddForm()">+ 新增</button>
+        <div style="display:flex;gap:6px;margin-left:auto">
+          <button class="btn-secondary" onclick="filterTrivia('all')" id="tf-all">全部</button>
+          <button class="btn-secondary" onclick="filterTrivia('pending')" id="tf-pending">待审核</button>
+          <button class="btn-secondary" onclick="filterTrivia('published')" id="tf-published">已发布</button>
+          <button class="btn-secondary" onclick="filterTrivia('pinned')" id="tf-pinned">置顶</button>
+        </div>
+        <span style="color:#6b7280;font-size:13px" id="trivia-count">-</span>
+      </div>
+
+      <!-- 新增/编辑表单 -->
+      <div id="trivia-form" style="display:none;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:16px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:#F5C76A" id="trivia-form-title">新增冷知识</div>
+        <input type="hidden" id="te-id">
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:4px">问题标题 *</label>
+          <input type="text" id="te-question" placeholder="问题是什么？" style="width:100%;padding:8px;background:#0a0e1a;border:1px solid #374151;border-radius:4px;color:#e2e8f0;font-size:14px">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:4px">补充说明</label>
+          <input type="text" id="te-desc" placeholder="可选的背景信息" style="width:100%;padding:8px;background:#0a0e1a;border:1px solid #374151;border-radius:4px;color:#e2e8f0;font-size:14px">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:4px">答案（Markdown）</label>
+          <textarea id="te-answer" rows="10" placeholder="用 Markdown 编写答案..." style="width:100%;padding:8px;background:#0a0e1a;border:1px solid #374151;border-radius:4px;color:#e2e8f0;font-size:13px;font-family:monospace;resize:vertical"></textarea>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:4px">状态</label>
+          <select id="te-status" style="padding:8px;background:#0a0e1a;border:1px solid #374151;border-radius:4px;color:#e2e8f0;font-size:14px">
+            <option value="pending">待审核</option>
+            <option value="published">发布</option>
+            <option value="pinned">置顶</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" style="background:#F5C76A;color:#0a0e1a;flex:1" onclick="submitTrivia()">保存</button>
+          <button class="btn-secondary" style="flex:1" onclick="hideTriviaForm()">取消</button>
+        </div>
+      </div>
+
+      <!-- 冷知识列表 -->
+      <div id="trivia-admin-list" style="max-height:500px;overflow-y:auto">
+        <div class="loading" style="text-align:center;padding:20px;color:#6b7280">加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.status-pending { background: #1c1a00; color: #fbbf24; }
+.status-published { background: #065f46; color: #10b981; }
+.status-pinned { background: #1e3a5f; color: #60a5fa; }
+
+.trivia-admin-item {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s;
+}
+.trivia-admin-item:hover { border-color: #374151; }
+.trivia-admin-item-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.trivia-admin-question {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+.trivia-admin-meta {
+  font-size: 12px;
+  color: #6b7280;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.trivia-filter-active {
+  border-color: #F5C76A !important;
+  color: #F5C76A !important;
+  background: rgba(245,199,106,0.08) !important;
+}
+</style>
+
+<script>
+let triviaAdminData = [];
+let triviaFilter = 'all';
+
+function openTriviaModal() {
+  document.getElementById('trivia-modal').classList.add('open');
+  loadTriviaAdmin();
+}
+
+function closeTriviaModal() {
+  document.getElementById('trivia-modal').classList.remove('open');
+  hideTriviaForm();
+}
+
+async function loadTriviaAdmin() {
+  try {
+    const resp = await fetch('/api/admin/trivia');
+    const data = await resp.json();
+    triviaAdminData = data.trivia || [];
+    renderTriviaAdmin();
+  } catch(e) {
+    document.getElementById('trivia-admin-list').innerHTML = '<div style="color:#f87171;text-align:center;padding:20px">加载失败</div>';
+  }
+}
+
+function filterTrivia(f) {
+  triviaFilter = f;
+  ['all','pending','published','pinned'].forEach(k => {
+    const el = document.getElementById('tf-' + k);
+    if (el) el.className = 'btn-secondary' + (k === f ? ' trivia-filter-active' : '');
+  });
+  renderTriviaAdmin();
+}
+
+function renderTriviaAdmin() {
+  const list = document.getElementById('trivia-admin-list');
+  let filtered = triviaFilter === 'all' ? triviaAdminData : triviaAdminData.filter(t => t.status === triviaFilter);
+  document.getElementById('trivia-count').textContent = `共 ${filtered.length} 条`;
+
+  if (!filtered.length) {
+    list.innerHTML = '<div style="color:#6b7280;text-align:center;padding:32px">无数据</div>';
+    return;
+  }
+
+  const statusLabels = { pending: '待审核', published: '已发布', pinned: '已置顶' };
+
+  list.innerHTML = filtered.map(t => `
+    <div class="trivia-admin-item">
+      <div class="trivia-admin-item-header">
+        <div class="trivia-admin-question">${t.question}</div>
+        <span class="status-badge status-${t.status}">${statusLabels[t.status] || t.status}</span>
+      </div>
+      ${t.description ? `<div style="font-size:12px;color:#6b7280;margin-bottom:6px">${t.description}</div>` : ''}
+      <div class="trivia-admin-meta">
+        <span>👍 ${t.upvotes} 👎 ${t.downvotes}</span>
+        ${t.authorName ? `<span>提问者: ${t.authorName}</span>` : ''}
+        ${t.authorContact ? `<span>联系: ${t.authorContact}</span>` : ''}
+        <span>${(t.createdAt || '').slice(0, 10)}</span>
+        <span style="color:${t.answer ? '#10b981' : '#6b7280'}">${t.answer ? '✓ 有答案' : '无答案'}</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn-icon" onclick="editTrivia(${t.id})" title="编辑/答题">✏️</button>
+        ${t.status === 'pending' ? `<button class="btn-icon" style="color:#10b981;border-color:#065f46" onclick="quickStatus(${t.id},'published')" title="发布">✓ 发布</button>` : ''}
+        ${t.status === 'published' ? `<button class="btn-icon" style="color:#60a5fa;border-color:#1e3a5f" onclick="quickStatus(${t.id},'pinned')" title="置顶">📌 置顶</button>` : ''}
+        ${t.status === 'pinned' ? `<button class="btn-icon" onclick="quickStatus(${t.id},'published')" title="取消置顶">📌 取消置顶</button>` : ''}
+        <button class="btn-icon danger" onclick="deleteTriviaItem(${t.id})" title="删除">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showTriviaAddForm() {
+  document.getElementById('trivia-form-title').textContent = '新增冷知识';
+  document.getElementById('te-id').value = '';
+  document.getElementById('te-question').value = '';
+  document.getElementById('te-desc').value = '';
+  document.getElementById('te-answer').value = '';
+  document.getElementById('te-status').value = 'pending';
+  document.getElementById('trivia-form').style.display = 'block';
+  setTimeout(() => document.getElementById('te-question').focus(), 50);
+}
+
+function editTrivia(id) {
+  const t = triviaAdminData.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('trivia-form-title').textContent = '编辑冷知识';
+  document.getElementById('te-id').value = id;
+  document.getElementById('te-question').value = t.question || '';
+  document.getElementById('te-desc').value = t.description || '';
+  document.getElementById('te-answer').value = t.answer || '';
+  document.getElementById('te-status').value = t.status || 'pending';
+  document.getElementById('trivia-form').style.display = 'block';
+  document.getElementById('trivia-form').scrollIntoView({behavior: 'smooth'});
+}
+
+function hideTriviaForm() {
+  document.getElementById('trivia-form').style.display = 'none';
+}
+
+async function submitTrivia() {
+  const id = document.getElementById('te-id').value;
+  const question = document.getElementById('te-question').value.trim();
+  if (!question) { alert('问题不能为空'); return; }
+
+  const payload = {
+    question,
+    description: document.getElementById('te-desc').value.trim(),
+    answer: document.getElementById('te-answer').value.trim(),
+    status: document.getElementById('te-status').value
+  };
+
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/admin/trivia/${id}` : '/api/trivia';
+
+  try {
+    const resp = await fetch(url, {
+      method,
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (resp.ok) {
+      hideTriviaForm();
+      loadTriviaAdmin();
+    } else {
+      alert('保存失败: ' + resp.status);
+    }
+  } catch(e) {
+    alert('网络错误');
+  }
+}
+
+async function quickStatus(id, status) {
+  try {
+    await fetch(`/api/admin/trivia/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status})
+    });
+    loadTriviaAdmin();
+  } catch(e) {
+    alert('操作失败');
+  }
+}
+
+async function deleteTriviaItem(id) {
+  const t = triviaAdminData.find(x => x.id === id);
+  if (!t || !confirm(`确认删除「${t.question}」？`)) return;
+  try {
+    await fetch(`/api/admin/trivia/${id}`, {method: 'DELETE'});
+    loadTriviaAdmin();
+  } catch(e) {
     alert('删除失败');
   }
 }
