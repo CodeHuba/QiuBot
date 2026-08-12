@@ -17,6 +17,7 @@ from plugins.bazaar_plugin.runs_query import RunsQuery
 from plugins.bazaar_plugin.data_client import CURRENT_SEASON_ID, CURRENT_PHASE
 
 INGEST_TOKEN = '2320869dd20357f336a056abc6b095ea615651ceadabf698'
+STATS_TOKEN=os.getenv('STATS_TOKEN', 'df1d9f1a038b')
 
 
 def _mask_ip(ip):
@@ -78,7 +79,13 @@ def _init_stats_tables():
     )''')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_fb_action ON feedback_action(action)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_fb_time ON feedback_action(created_at)')
-    
+
+    # 数据清理：保留最近 90 天的 api_log/page_view/feedback_action，query_log 保留 180 天
+    conn.execute("DELETE FROM api_log WHERE created_at < datetime('now', '-90 days')")
+    conn.execute("DELETE FROM page_view WHERE created_at < datetime('now', '-90 days')")
+    conn.execute("DELETE FROM feedback_action WHERE created_at < datetime('now', '-90 days')")
+    conn.execute("DELETE FROM query_log WHERE rowid IN (SELECT rowid FROM query_log WHERE created_at < datetime('now', '-180 days'))") if 'query_log' in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()] else None
+
     conn.commit()
     conn.close()
 
@@ -638,6 +645,9 @@ def index():
 
 @app.route('/admin/stats')
 def stats_dashboard():
+    token = request.args.get('token', '')
+    if token != STATS_TOKEN:
+        return jsonify({'error': 'Unauthorized'}), 403
     return send_from_directory('static', 'stats.html')
 
 
