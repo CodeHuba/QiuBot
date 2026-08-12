@@ -18,6 +18,14 @@ from plugins.bazaar_plugin.data_client import CURRENT_SEASON_ID, CURRENT_PHASE
 
 INGEST_TOKEN = '2320869dd20357f336a056abc6b095ea615651ceadabf698'
 
+
+def _mask_ip(ip):
+    """IP脱敏：只保留前两段，如 115.238.*.*"""
+    if not ip:
+        return '*.*.*.*'
+    p = str(ip).split('.')
+    return f"{p[0]}.{p[1]}.*.*" if len(p) == 4 else ip
+
 app = Flask(__name__, static_folder='static')
 
 # 在 app.py 开头（imports 后）添加统一埋点中间件和 stats 表
@@ -94,7 +102,7 @@ def after_request(response):
                 endpoint=request.path,
                 method=request.method,
                 params=dict(request.args) or dict(request.form) or {},
-                ip=request.headers.get('X-Forwarded-For', request.remote_addr),
+                ip=_mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr)),
                 fingerprint=g.fingerprint,
                 result_count=getattr(g, 'result_count', 0),
                 success=response.status_code < 400,
@@ -143,7 +151,7 @@ def api_track_pv():
     data = request.get_json(silent=True) or {}
     tab = data.get('tab', '')
     if tab:
-        _log_page_view(tab, request.headers.get('X-Forwarded-For', request.remote_addr), g.fingerprint)
+        _log_page_view(tab, _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr)), g.fingerprint)
     return jsonify({'ok': True})
 
 
@@ -187,7 +195,7 @@ _rate_limit = defaultdict(float)
 def rate_limit(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         now = time.time()
         last = _rate_limit.get(ip, 0)
         if now - last < 3:
@@ -218,12 +226,12 @@ def api_runs():
                 return jsonify({'error': f'未识别的英雄: {hero}'}), 400
             hero = resolved
         result = client.query(hero=hero, cards=cards, days=days, min_wins=min_wins, page=page)
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('runs', {'hero': hero, 'cards': cards, 'days': days, 'min_wins': min_wins, 'page': page},
                    ip, result.get('total', 0), True)
         return jsonify(result)
     except Exception as e:
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('runs', {'hero': hero, 'cards': cards_raw, 'days': days, 'min_wins': min_wins, 'page': page}, ip, 0, False)
         return jsonify({'error': str(e)}), 500
 
@@ -244,11 +252,11 @@ def api_winrate():
         client.load()
         hero = client.resolve_hero(hero_raw) if hero_raw else None
         result = client.winrate(cards=cards, hero=hero, days=days)
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('winrate', {'cards': cards, 'hero': hero_raw, 'days': days}, ip, result.get('total', 0), True)
         return jsonify(result)
     except Exception as e:
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('winrate', {'cards': cards_raw, 'hero': hero_raw, 'days': days}, ip, 0, False)
         return jsonify({'error': str(e)}), 500
 
@@ -272,11 +280,11 @@ def api_partner():
                 zh = p['name']
                 en = client.zh_to_en.get(zh, zh)
                 p['img'] = client.tex_map.get(en, '')
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('partner', {'card': card, 'days': days}, ip, len(result.get('by_winrate', [])), True)
         return jsonify(result)
     except Exception as e:
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('partner', {'card': card, 'days': days}, ip, 0, False)
         return jsonify({'error': str(e)}), 500
 
@@ -414,7 +422,7 @@ def api_topcard():
     if days:
         days = int(days)
     all_phases = request.args.get('all_phases') == 'true'
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr))
     try:
         query = RunsQuery()
         result = query.topcard(hero=hero, top_n=top_n, days=days, all_phases=all_phases)
@@ -490,7 +498,7 @@ def api_feedback_post():
         conn.commit()
         row = conn.execute('SELECT * FROM feedback WHERE id=?', (fid,)).fetchone()
         conn.close()
-        _log_feedback_action('submit', fid, request.headers.get('X-Forwarded-For', request.remote_addr), g.fingerprint)
+        _log_feedback_action('submit', fid, _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr)), g.fingerprint)
         return jsonify(dict(row)), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -505,7 +513,7 @@ def api_feedback_like(fid):
         conn.close()
         if not likes:
             return jsonify({'error': 'not found'}), 404
-        _log_feedback_action('like', fid, request.headers.get('X-Forwarded-For', request.remote_addr), g.fingerprint)
+        _log_feedback_action('like', fid, _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr)), g.fingerprint)
         return jsonify({'likes': likes[0]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
