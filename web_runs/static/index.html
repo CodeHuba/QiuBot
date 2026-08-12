@@ -180,6 +180,7 @@ input::placeholder{color:#4b5563}
           <option value="斯黛拉">斯黛拉</option>
           <option value="朱尔斯">朱尔斯</option>
           <option value="卡诺克">卡诺克</option>
+          <option value="双龙">双龙</option>
         </select>
       </div>
       <div class="form-group">
@@ -225,6 +226,7 @@ input::placeholder{color:#4b5563}
           <option value="斯黛拉">斯黛拉</option>
           <option value="朱尔斯">朱尔斯</option>
           <option value="卡诺克">卡诺克</option>
+          <option value="双龙">双龙</option>
         </select>
       </div>
       <div class="form-group">
@@ -303,7 +305,7 @@ input::placeholder{color:#4b5563}
 </div>
 
 <script>
-const HEROES = {凡妮莎:'Vanessa',杜利:'Dooley',马克:'Mak',皮格:'Pygmalien',斯黛拉:'Stelle',朱尔斯:'Jules',卡诺克:'Karnok'};
+const HEROES = {凡妮莎:'Vanessa',杜利:'Dooley',马克:'Mak',皮格:'Pygmalien',斯黛拉:'Stelle',朱尔斯:'Jules',卡诺克:'Karnok',双龙:'The Dragons'};
 let lastQuery = 0;
 
 function switchTab(tab) {
@@ -364,7 +366,7 @@ function renderRuns(data, page, params) {
     document.getElementById('runs-result').innerHTML = '<div class="result-card"><div class="empty">未找到符合条件的阵容</div></div>';
     return;
   }
-  const heroZh = {Vanessa:'凡妮莎',Dooley:'杜利',Mak:'马克',Pygmalien:'皮格',Stelle:'斯黛拉',Jules:'朱尔斯',Karnok:'卡诺克'};
+  const heroZh = {Vanessa:'凡妮莎',Dooley:'杜利',Mak:'马克',Pygmalien:'皮格',Stelle:'斯黛拉',Jules:'朱尔斯',Karnok:'卡诺克','The Dragons':'双龙'};
   let items = runs.map(r => {
     const day = r.wins + r.losses;
     const itemsStr = r.items.slice(0,5).join('、') + (r.items.length>5?` +${r.items.length-5}`:'');

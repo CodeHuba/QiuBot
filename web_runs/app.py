@@ -88,7 +88,8 @@ def after_request(response):
     if hasattr(g, 'start_time'):
         duration_ms = int((time.time() - g.start_time) * 1000)
         endpoint = request.endpoint
-        if endpoint and endpoint.startswith('api_'):
+        _user_api_paths = ('/api/runs', '/api/winrate', '/api/partner', '/api/heroes', '/api/suggestions', '/api/card_img', '/api/topcard', '/api/feedback')
+        if endpoint and endpoint.startswith('api_') and request.path.startswith(_user_api_paths):
             _log_api_call(
                 endpoint=request.path,
                 method=request.method,
@@ -297,6 +298,7 @@ def api_heroes():
         {'zh': '斯黛拉', 'en': 'Stelle'},
         {'zh': '朱尔斯', 'en': 'Jules'},
         {'zh': '卡诺克', 'en': 'Karnok'},
+        {'zh': '双龙',   'en': 'The Dragons'},
     ]
     return jsonify(standard)
 
@@ -325,7 +327,7 @@ def api_suggestions():
             hero = p.get('hero')
             if hero:
                 hero_map = {'Vanessa':'凡妮莎','Dooley':'杜利','Mak':'马克',
-                            'Pygmalien':'皮格','Stelle':'斯黛拉','Jules':'朱尔斯','Karnok':'卡诺克'}
+                            'Pygmalien':'皮格','Stelle':'斯黛拉','Jules':'朱尔斯','Karnok':'卡诺克','The Dragons':'双龙'}
                 hero_counter[hero_map.get(hero, hero)] += 1
             # 卡牌
             cards = p.get('cards') or []
