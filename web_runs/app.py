@@ -108,6 +108,17 @@ def after_request(response):
                 success=response.status_code < 400,
                 duration_ms=duration_ms
             )
+    # 静态资源缓存头
+    if request.path.startswith('/static/'):
+        ext = request.path.rsplit('.', 1)[-1].lower()
+        if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'woff', 'woff2'):
+            response.cache_control.max_age = 86400 * 30  # 图片字体 30 天
+            response.cache_control.public = True
+        elif ext in ('css', 'js'):
+            response.cache_control.max_age = 86400 * 7   # CSS/JS 7 天
+            response.cache_control.public = True
+        elif ext == 'html':
+            response.cache_control.no_cache = True        # HTML 不缓存
     return response
 
 def _log_api_call(endpoint, method, params, ip, fingerprint, result_count, success, duration_ms):
