@@ -506,7 +506,7 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "") -> str
     loc = raw.get("Localization") or {}
     title_text = loc.get("Title", {}).get("Text", "") or raw.get("InternalName", "")
     title_key  = loc.get("Title", {}).get("Key", "")
-    name_zh = zh_name or trans.get_zh(title_text) or (trans.get_zh_by_hash(title_key) if title_key else "") or title_text
+    name_zh = zh_name or trans.get_zh(title_text) or (trans.get_zh_by_key(title_key) if title_key else "") or title_text
     name_en = title_text
 
     size_label = {"Small": "小", "Medium": "中", "Large": "大", "Small Large": "小/大"}.get(

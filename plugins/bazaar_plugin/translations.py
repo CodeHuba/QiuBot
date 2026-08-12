@@ -164,6 +164,11 @@ def get_zh_by_key(key: str) -> str | None:
     return _hash_to_zh.get(key)
 
 
+def get_zh_by_hash(key: str) -> str | None:
+    """兼容旧调用名：通过 hash key 查中文翻译。"""
+    return get_zh_by_key(key)
+
+
 def get_tooltip_zh(text_en: str) -> str | None:
     """通过英文 tooltip 文本查中文翻译"""
     if not text_en:

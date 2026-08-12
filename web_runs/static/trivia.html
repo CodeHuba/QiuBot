@@ -114,6 +114,32 @@ body::before {
   position: relative;
 }
 
+.sort-btn {
+  padding: 6px 14px;
+  border-radius: 5px;
+  border: 1px solid rgba(138,77,255,0.25);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.sort-btn:hover {
+  border-color: rgba(245,199,106,0.4);
+  color: var(--text-primary);
+  background: rgba(245,199,106,0.06);
+}
+
+.sort-btn.active {
+  border-color: var(--neon-gold);
+  color: var(--neon-gold);
+  background: rgba(245,199,106,0.12);
+  box-shadow: 0 0 12px rgba(245,199,106,0.15);
+}
+
 .nav-tab.active::after {
   content:'';
   position: absolute;
@@ -747,6 +773,13 @@ footer a:hover {
     <p class="page-desc">由玩家驱动的数据洞察，解答你在游戏中遇到的疑惑。</p>
   </div>
 
+  <div style="display:flex;gap:6px;margin-bottom:16px;align-items:center">
+    <span style="font-size:13px;color:var(--text-secondary)">排序:</span>
+    <button class="sort-btn active" id="sort-default" onclick="changeSortMode('default')">默认</button>
+    <button class="sort-btn" id="sort-hot" onclick="changeSortMode('hot')">最热</button>
+    <button class="sort-btn" id="sort-time" onclick="changeSortMode('time')">最新</button>
+  </div>
+
   <div class="layout">
     <!-- 左侧：冷知识列表 -->
     <div>
@@ -816,6 +849,7 @@ function formatDate(s) {
 /* ===== 冷知识列表 ===== */
 let triviaData = [];
 let userVotes = JSON.parse(localStorage.getItem('_trivia_votes') || '{}');
+let sortMode = 'default'; // default / hot / time
 
 async function loadTrivia() {
   try {
@@ -836,7 +870,22 @@ function renderTrivia() {
     return;
   }
 
-  el.innerHTML = triviaData.map((t, i) => {
+  // 排序逻辑
+  let sorted = [...triviaData];
+  if (sortMode === 'hot') {
+    sorted.sort((a, b) => {
+      const scoreA = (a.upvotes || 0) - (a.downvotes || 0);
+      const scoreB = (b.upvotes || 0) - (b.downvotes || 0);
+      return scoreB - scoreA; // 热度降序
+    });
+  } else if (sortMode === 'time') {
+    sorted.sort((a, b) => {
+      return (b.publishedAt || '').localeCompare(a.publishedAt || ''); // 时间降序
+    });
+  }
+  // default 保持服务端排序（置顶>热度>时间）
+
+  el.innerHTML = sorted.map((t, i) => {
     const pinned = t.status === 'pinned';
     const hasAnswer = t.answer && t.answer.trim();
     const myVote = userVotes[t.id] || null;
@@ -894,6 +943,15 @@ function toggleTrivia(id) {
   const card = document.getElementById('trivia-' + id);
   if (!card) return;
   card.classList.toggle('expanded');
+}
+
+function changeSortMode(mode) {
+  sortMode = mode;
+  ['default', 'hot', 'time'].forEach(m => {
+    const btn = document.getElementById('sort-' + m);
+    if (btn) btn.className = 'sort-btn' + (m === mode ? ' active' : '');
+  });
+  renderTrivia();
 }
 
 async function vote(id, voteType) {
