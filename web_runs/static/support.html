@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>支持 - 巴扎丘Bot</title>
+<meta name="description" content="支持 bazaarqiubot 的持续开发，你的支持将用于网站维护、数据更新和新功能开发。">
+<meta name="robots" content="index, follow">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐉</text></svg>">
+<style>
+/* ============================================
+   霓虹幻想风格 - 支持页面
+   ============================================ */
+:root {
+  --bg-deep: #090A2A;
+  --bg-surface: #171047;
+  --bg-panel: #15133B;
+  --neon-magenta: #F438B8;
+  --neon-cyan: #26D9F2;
+  --neon-violet: #8A4DFF;
+  --neon-teal: #36E3C1;
+  --neon-coral: #FF536A;
+  --neon-gold: #F5C76A;
+  --text-primary: #F5F4FF;
+  --text-secondary: #B5B3D7;
+  --glow-magenta: 0 0 20px rgba(244,56,184,0.5);
+  --glow-cyan: 0 0 20px rgba(38,217,242,0.5);
+  --glow-violet: 0 0 16px rgba(138,77,255,0.4);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-deep);
+  background-image:
+    linear-gradient(rgba(138,77,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(138,77,255,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(38,217,242,0.02) 2px,
+    rgba(38,217,242,0.02) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ============ 导航栏 ============ */
+.navbar {
+  background: var(--bg-surface);
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta)) 1;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  gap: 32px;
+  box-shadow: 0 4px 24px rgba(244,56,184,0.15);
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--neon-magenta);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  text-shadow: var(--glow-magenta);
+  text-decoration: none;
+}
+
+.logo::before {
+  content: '⚡';
+  margin-right: 6px;
+  color: var(--neon-cyan);
+  text-shadow: var(--glow-cyan);
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nav-tab {
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  background: transparent;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  text-decoration: none;
+  display: inline-block;
+  font-family: inherit;
+}
+
+.nav-tab:hover {
+  color: var(--text-primary);
+  border-color: rgba(38,217,242,0.4);
+  background: rgba(38,217,242,0.08);
+}
+
+.nav-tab.active {
+  color: var(--text-primary);
+  background: linear-gradient(135deg, rgba(244,56,184,0.15), rgba(38,217,242,0.15));
+  border-color: var(--neon-magenta);
+  box-shadow: var(--glow-magenta);
+  position: relative;
+}
+
+.nav-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+}
+
+/* ============ 主容器 ============ */
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 60px 20px 80px;
+  position: relative;
+  z-index: 2;
+}
+
+/* ============ 页面头部 ============ */
+.page-header {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.page-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+  letter-spacing: 0.02em;
+}
+
+.page-title span {
+  color: var(--neon-magenta);
+  text-shadow: var(--glow-magenta);
+}
+
+.page-desc {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.page-sub {
+  font-size: 14px;
+  color: rgba(181,179,215,0.6);
+}
+
+/* 装饰线 */
+.page-header::after {
+  content: '';
+  display: block;
+  width: 80px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+  margin: 24px auto 0;
+  border-radius: 2px;
+}
+
+/* ============ 赞赏卡片 ============ */
+.support-section {
+  max-width: 760px;
+  margin: 0 auto 64px;
+}
+
+/* 品红主边框 + 青色角标 */
+.support-card {
+  background: var(--bg-panel);
+  border: 1px solid rgba(244,56,184,0.4);
+  border-radius: 8px;
+  padding: 36px 40px;
+  position: relative;
+  box-shadow: inset 0 0 60px rgba(244,56,184,0.04), 0 0 40px rgba(244,56,184,0.08);
+}
+
+/* 青色角标 */
+.support-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 14px;
+  height: 14px;
+  background: var(--neon-cyan);
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  border-radius: 0 8px 0 0;
+}
+
+/* 品红角标（左下） */
+.support-card::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: -1px;
+  width: 10px;
+  height: 10px;
+  background: var(--neon-magenta);
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  border-radius: 0 0 0 8px;
+}
+
+.card-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(38,217,242,0.3);
+  background: rgba(38,217,242,0.06);
+  color: var(--neon-cyan);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 20px;
+}
+
+.card-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neon-cyan);
+  box-shadow: 0 0 6px var(--neon-cyan);
+}
+
+.card-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.card-desc {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.card-sub {
+  font-size: 13px;
+  color: rgba(181,179,215,0.5);
+  margin-bottom: 28px;
+}
+
+.btn-support {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 28px;
+  border-radius: 6px;
+  border: none;
+  background: linear-gradient(135deg, var(--neon-magenta), var(--neon-violet));
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  font-family: inherit;
+  box-shadow: 0 4px 20px rgba(244,56,184,0.4);
+}
+
+.btn-support:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(244,56,184,0.6);
+  filter: brightness(1.08);
+}
+
+.btn-support:active {
+  transform: translateY(0);
+}
+
+.btn-support svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* ============ 模态框 ============ */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(9,10,42,0.85);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid rgba(244,56,184,0.45);
+  border-radius: 8px;
+  padding: 32px;
+  max-width: 420px;
+  width: 100%;
+  position: relative;
+  box-shadow: 0 0 60px rgba(244,56,184,0.2), inset 0 0 40px rgba(244,56,184,0.04);
+  animation: modalIn 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* 青色角标 */
+.modal::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 14px;
+  height: 14px;
+  background: var(--neon-cyan);
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  border-radius: 0 8px 0 0;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(138,77,255,0.25);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.modal-close:hover {
+  border-color: var(--neon-magenta);
+  color: var(--neon-magenta);
+  background: rgba(244,56,184,0.08);
+}
+
+.modal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(244,56,184,0.3);
+  background: rgba(244,56,184,0.06);
+  color: var(--neon-magenta);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 24px;
+}
+
+/* 二维码容器 */
+.qrcode-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.qrcode-wrap img {
+  max-width: 100%;
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+  display: block;
+}
+
+/* 占位二维码 */
+.qrcode-placeholder {
+  width: 220px;
+  height: 220px;
+  border: 2px dashed rgba(244,56,184,0.3);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  gap: 8px;
+}
+
+.qrcode-placeholder svg {
+  width: 40px;
+  height: 40px;
+  opacity: 0.4;
+}
+
+.modal-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.modal-hint strong {
+  color: var(--neon-gold);
+}
+
+/* ============ 支持者名单 ============ */
+.supporters-section {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.section-header {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 18px;
+  background: linear-gradient(180deg, var(--neon-cyan), var(--neon-violet));
+  border-radius: 2px;
+  box-shadow: var(--glow-cyan);
+  flex-shrink: 0;
+}
+
+.section-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding-left: 13px;
+}
+
+/* 支持者名单容器 - 品红主边框 + 青色角标 */
+.supporters-card {
+  background: var(--bg-panel);
+  border: 1px solid rgba(244,56,184,0.3);
+  border-radius: 8px;
+  padding: 28px;
+  position: relative;
+}
+
+.supporters-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  background: var(--neon-cyan);
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  border-radius: 0 8px 0 0;
+}
+
+/* 空状态 */
+.supporters-empty {
+  text-align: center;
+  padding: 32px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.supporters-empty::before {
+  content: '✨';
+  display: block;
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+/* 名单网格 */
+.supporters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.supporter-name {
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(138,77,255,0.15);
+  background: rgba(9,10,42,0.5);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.supporter-name:hover {
+  border-color: rgba(245,199,106,0.3);
+  color: var(--neon-gold);
+  background: rgba(245,199,106,0.05);
+}
+
+.supporters-footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(138,77,255,0.1);
+  text-align: center;
+  font-size: 13px;
+  color: rgba(181,179,215,0.5);
+}
+
+/* 展开/收起 */
+.btn-expand {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(138,77,255,0.25);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-expand:hover {
+  border-color: var(--neon-violet);
+  color: var(--neon-violet);
+  background: rgba(138,77,255,0.08);
+}
+
+/* ============ 加载状态 ============ */
+.loading-state {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ============ Footer ============ */
+footer {
+  margin-top: 60px;
+  padding: 30px 20px;
+  border-top: 1px solid rgba(138,77,255,0.2);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+footer a {
+  color: var(--neon-cyan);
+  text-decoration: none;
+  margin: 0 15px;
+  transition: color 0.2s;
+}
+
+footer a:hover {
+  color: var(--neon-teal);
+  text-shadow: 0 0 8px rgba(38,217,242,0.5);
+}
+
+/* ============ 移动端适配 ============ */
+@media (max-width: 768px) {
+  .navbar {
+    height: auto;
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .nav-tabs {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 6px;
+  }
+
+  .nav-tabs::-webkit-scrollbar { display: none; }
+
+  .nav-tab {
+    font-size: 13px;
+    padding: 8px 14px;
+    flex-shrink: 0;
+  }
+
+  .main {
+    padding: 40px 12px 60px;
+  }
+
+  .page-title {
+    font-size: 26px;
+  }
+
+  .support-card {
+    padding: 24px 20px;
+  }
+
+  .btn-support {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .supporters-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modal {
+    padding: 24px 20px;
+    margin: 16px;
+  }
+
+  .qrcode-wrap img,
+  .qrcode-placeholder {
+    width: 180px;
+    height: 180px;
+  }
+
+  footer {
+    padding: 24px 12px;
+  }
+}
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="logo">巴扎丘Bot</a>
+  <div class="nav-tabs">
+    <a href="/" class="nav-tab">阵容查询</a>
+    <a href="/" class="nav-tab">胜率查询</a>
+    <a href="/" class="nav-tab">最佳搭档</a>
+    <a href="/" class="nav-tab">职业榜单</a>
+    <a href="/" class="nav-tab">意见反馈</a>
+    <a href="/support" class="nav-tab active">支持</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <h1 class="page-title">支持 <span>巴扎丘Bot</span></h1>
+    <p class="page-desc">你的支持将用于网站维护、数据更新和新功能开发。</p>
+    <p class="page-sub">每一份支持，都会帮助大巴扎中文数据平台持续完善。</p>
+  </div>
+
+  <!-- 微信赞赏卡片 -->
+  <div class="support-section">
+    <div class="support-card">
+      <div class="card-tag">中国大陆</div>
+      <h2 class="card-title">微信赞赏</h2>
+      <p class="card-desc">微信扫码，请 bazaarqiubot 喝一杯。</p>
+      <p class="card-sub">赞赏不会影响网站功能的免费使用。</p>
+      <button class="btn-support" id="btn-open-qr" onclick="openModal()" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
+          <rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/>
+          <rect x="18" y="18" width="3" height="3"/>
+        </svg>
+        查看赞赏码
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 支持者名单 -->
+  <div class="supporters-section">
+    <div class="section-header">
+      <h2 class="section-title">支持者名单</h2>
+      <p class="section-desc">感谢每一位支持 bazaarqiubot 的朋友。</p>
+    </div>
+    <div class="supporters-card">
+      <div id="supporters-content">
+        <div class="loading-state">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 赞赏码模态框 -->
+<div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-hint">
+  <div class="modal" id="modal">
+    <button class="modal-close" id="modal-close" onclick="closeModal()" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+    </button>
+    <div class="modal-tag">微信赞赏</div>
+    <h3 class="modal-title" id="modal-title">请喝一杯 ☕</h3>
+    <div class="qrcode-wrap">
+      <!-- 二维码图片路径 - 配置位置：/static/wechat_qr.png -->
+      <!-- 有赞赏码后替换下方占位符：将 id="qr-placeholder" 整块替换为 <img src="/static/wechat_qr.png" alt="微信赞赏码" width="220" height="220"> -->
+<img src="/static/wechat_qr.png" alt="微信赞赏码" width="220" height="220" style="object-fit:contain">
+    </div>
+    <p class="modal-hint" id="modal-hint">
+      如果希望出现在支持者名单中，<br>
+      可以在赞赏备注里留下你的 <strong>ID</strong>。
+    </p>
+  </div>
+</div>
+
+<footer>
+  <div style="margin-bottom:12px">
+    <a href="/static/privacy.html" target="_blank">隐私政策</a>
+    <span style="color:#4b5563;margin:0 5px">|</span>
+    <a href="https://github.com/CodeHuba/QiuBot" target="_blank">GitHub</a>
+    <span style="color:#4b5563;margin:0 5px">|</span>
+    <span style="color:#6b7280;margin:0 15px">反馈QQ群：<a href="https://qm.qq.com/q/1102189995" target="_blank" style="color:var(--neon-coral);text-shadow:0 0 8px rgba(255,83,106,0.5)">1102189995</a></span>
+  </div>
+  <div style="color:#4b5563">
+    <a href="https://beian.miit.gov.cn/" target="_blank" style="color:#4b5563;text-decoration:none">浙ICP备XXXXXXXX号-X</a>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:#4b5563">© 2026 BazaarQiuBot - The Bazaar 中文社区数据服务</div>
+</footer>
+
+<script>
+/* ============ 配置 ============ */
+const CONFIG = {
+  qrcodePath: '/static/wechat_qr.png',   // 微信赞赏码图片路径
+  supportersAPI: '/static/supporters.json', // 支持者数据路径
+  maxVisible: 20,                          // 默认展示人数
+};
+
+/* ============ 模态框 ============ */
+function openModal() {
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  // 焦点移到关闭按钮
+  setTimeout(() => document.getElementById('modal-close').focus(), 50);
+}
+
+function closeModal() {
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+  // 焦点归还打开按钮
+  document.getElementById('btn-open-qr').focus();
+}
+
+// 点击遮罩关闭
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Esc 关闭
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('modal-overlay').classList.contains('open')) {
+    closeModal();
+  }
+});
+
+// 焦点陷阱：保持焦点在模态框内
+document.getElementById('modal').addEventListener('keydown', function(e) {
+  if (e.key !== 'Tab') return;
+  const focusable = this.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])');
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  }
+});
+
+/* ============ 支持者名单 ============ */
+let allSupporters = [];
+let expanded = false;
+
+async function loadSupporters() {
+  const el = document.getElementById('supporters-content');
+  try {
+    const resp = await fetch(CONFIG.supportersAPI);
+    const data = await resp.json();
+    allSupporters = (data.supporters || []).filter(s => s.visible);
+    renderSupporters();
+  } catch (e) {
+    renderSupporters();
+  }
+}
+
+function renderSupporters() {
+  const el = document.getElementById('supporters-content');
+  if (!allSupporters.length) {
+    el.innerHTML = `
+      <div class="supporters-empty">
+        支持者名单正在整理中，感谢所有未署名的支持者。
+      </div>
+      <div class="supporters-footer">也感谢所有未署名的支持者。</div>`;
+    return;
+  }
+
+  const visible = expanded ? allSupporters : allSupporters.slice(0, CONFIG.maxVisible);
+  const grid = visible.map(s =>
+    `<div class="supporter-name" title="${s.displayName}">${s.displayName}</div>`
+  ).join('');
+
+  const expandBtn = allSupporters.length > CONFIG.maxVisible
+    ? `<button class="btn-expand" onclick="toggleExpand()">
+        ${expanded ? '收起' : `展开全部 (${allSupporters.length} 位)`}
+       </button>`
+    : '';
+
+  el.innerHTML = `
+    <div class="supporters-grid">${grid}</div>
+    ${expandBtn}
+    <div class="supporters-footer">也感谢所有未署名的支持者。</div>`;
+}
+
+function toggleExpand() {
+  expanded = !expanded;
+  renderSupporters();
+}
+
+/* ============ 初始化 ============ */
+loadSupporters();
+</script>
+</body>
+</html>

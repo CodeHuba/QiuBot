@@ -644,6 +644,10 @@ def api_stats_overview():
 def index():
     return send_from_directory('static', 'index.html')
 
+@app.route('/support')
+def support():
+    return send_from_directory('static', 'support.html')
+
 @app.route('/admin/stats')
 def stats_dashboard():
     auth = request.authorization
