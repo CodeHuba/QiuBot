@@ -10,14 +10,13 @@ import sqlite3 as _sqlite3
 from datetime import datetime
 from collections import defaultdict
 from functools import wraps
-from flask import Flask, request, jsonify, send_from_directory, send_file, abort
+from flask import Flask, request, jsonify, send_from_directory, send_file, abort, Response
 
 sys.path.insert(0, '/opt/qiubot')
 from plugins.bazaar_plugin.runs_query import RunsQuery
 from plugins.bazaar_plugin.data_client import CURRENT_SEASON_ID, CURRENT_PHASE
 
 INGEST_TOKEN = '2320869dd20357f336a056abc6b095ea615651ceadabf698'
-STATS_TOKEN=os.getenv('STATS_TOKEN', 'df1d9f1a038b')
 
 
 def _mask_ip(ip):
@@ -645,9 +644,13 @@ def index():
 
 @app.route('/admin/stats')
 def stats_dashboard():
-    token = request.args.get('token', '')
-    if token != STATS_TOKEN:
-        return jsonify({'error': 'Unauthorized'}), 403
+    auth = request.authorization
+    if not auth or auth.password != 'qq593426711':
+        return Response(
+            'Unauthorized',
+            401,
+            {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'}
+        )
     return send_from_directory('static', 'stats.html')
 
 
