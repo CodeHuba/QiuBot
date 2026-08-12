@@ -186,9 +186,26 @@ def render_tooltip(
                 if isinstance(tc, dict) and tc.get("$type") == "TFixedValue":
                     return fmt_val(tc.get("Value"))
                 return "1"
+            if sub == "mod":
+                # {ability.X.mod} 取 Action.Value.Modifier.Value（通常是 TReferenceValueCardAttribute）
+                # 即倍率因子，从 tier_attrs 中解析
+                val = action.get("Value", {})
+                if isinstance(val, dict):
+                    modifier = val.get("Modifier")
+                    if isinstance(modifier, dict):
+                        mod_val_obj = modifier.get("Value", {})
+                        if isinstance(mod_val_obj, dict):
+                            mvtype = mod_val_obj.get("$type", "")
+                            if mvtype == "TFixedValue":
+                                return fmt_val(mod_val_obj.get("Value"))
+                            if "ReferenceValue" in mvtype or mvtype.endswith("Attribute"):
+                                ref_attr = mod_val_obj.get("AttributeType", "")
+                                if ref_attr and ref_attr in tier_attrs:
+                                    return fmt_val(tier_attrs[ref_attr], ref_attr)
+                return None
             v, ak = extract_value(action, tier_attrs)
             if v is None:
-                return None
+                return "?"
             return fmt_val(v, ak)
 
         elif prefix == "aura":
