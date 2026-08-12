@@ -87,6 +87,15 @@ def _init_stats_tables():
     conn.execute("DELETE FROM feedback_action WHERE created_at < datetime('now', '-90 days')")
     conn.execute("DELETE FROM query_log WHERE rowid IN (SELECT rowid FROM query_log WHERE created_at < datetime('now', '-180 days'))") if 'query_log' in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()] else None
 
+    # 赞赏者名单
+    conn.execute('''CREATE TABLE IF NOT EXISTS supporters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        display_name TEXT NOT NULL,
+        visible INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+    )''')
+
     conn.commit()
     conn.close()
 
@@ -647,6 +656,102 @@ def index():
 @app.route('/support')
 def support():
     return send_from_directory('static', 'support.html')
+
+# ===== Supporters API =====
+
+@app.route('/api/supporters', methods=['GET'])
+def get_supporters():
+    """公开接口：返回 visible=1 的支持者列表"""
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    rows = conn.execute(
+        'SELECT id, display_name, sort_order FROM supporters WHERE visible=1 ORDER BY sort_order ASC, created_at ASC'
+    ).fetchall()
+    conn.close()
+    return jsonify({'supporters': [{'id': r[0], 'displayName': r[1], 'order': r[2]} for r in rows]})
+
+@app.route('/api/admin/supporters', methods=['GET'])
+def admin_list_supporters():
+    """管理接口：返回全部支持者（含隐藏）"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    rows = conn.execute(
+        'SELECT id, display_name, visible, sort_order, created_at FROM supporters ORDER BY sort_order ASC, created_at ASC'
+    ).fetchall()
+    conn.close()
+    return jsonify({'supporters': [
+        {'id': r[0], 'displayName': r[1], 'visible': bool(r[2]), 'order': r[3], 'createdAt': r[4]}
+        for r in rows
+    ]})
+
+@app.route('/api/admin/supporters', methods=['POST'])
+def admin_add_supporter():
+    """新增支持者"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    data = request.get_json() or {}
+    name = (data.get('displayName') or '').strip()
+    if not name:
+        return jsonify({'error': 'displayName 不能为空'}), 400
+    visible = 1 if data.get('visible', True) else 0
+    order = int(data.get('order', 0))
+    import sqlite3 as _sl
+    from datetime import datetime
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    cur = conn.execute(
+        'INSERT INTO supporters (display_name, visible, sort_order, created_at) VALUES (?,?,?,?)',
+        (name, visible, order, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'id': new_id, 'displayName': name, 'visible': bool(visible), 'order': order}), 201
+
+@app.route('/api/admin/supporters/<int:sid>', methods=['PUT'])
+def admin_update_supporter(sid):
+    """编辑支持者"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    data = request.get_json() or {}
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    row = conn.execute('SELECT id FROM supporters WHERE id=?', (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': '不存在'}), 404
+    name = (data.get('displayName') or '').strip()
+    if not name:
+        conn.close()
+        return jsonify({'error': 'displayName 不能为空'}), 400
+    visible = 1 if data.get('visible', True) else 0
+    order = int(data.get('order', 0))
+    conn.execute(
+        'UPDATE supporters SET display_name=?, visible=?, sort_order=? WHERE id=?',
+        (name, visible, order, sid)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({'id': sid, 'displayName': name, 'visible': bool(visible), 'order': order})
+
+@app.route('/api/admin/supporters/<int:sid>', methods=['DELETE'])
+def admin_delete_supporter(sid):
+    """删除支持者"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    conn.execute('DELETE FROM supporters WHERE id=?', (sid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+# ===== Admin Stats =====
 
 @app.route('/admin/stats')
 def stats_dashboard():

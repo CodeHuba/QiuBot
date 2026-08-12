@@ -777,7 +777,7 @@ footer a:hover {
 /* ============ 配置 ============ */
 const CONFIG = {
   qrcodePath: '/static/wechat_qr.png',   // 微信赞赏码图片路径
-  supportersAPI: '/static/supporters.json', // 支持者数据路径
+  supportersAPI: '/api/supporters', // 支持者数据路径
   maxVisible: 20,                          // 默认展示人数
 };
 
@@ -831,7 +831,7 @@ async function loadSupporters() {
   try {
     const resp = await fetch(CONFIG.supportersAPI);
     const data = await resp.json();
-    allSupporters = (data.supporters || []).filter(s => s.visible);
+    allSupporters = data.supporters || [];
     renderSupporters();
   } catch (e) {
     renderSupporters();
@@ -872,7 +872,7 @@ function toggleExpand() {
 }
 
 /* ============ 初始化 ============ */
-loadSupporters();
+window.addEventListener("DOMContentLoaded", loadSupporters);
 </script>
 </body>
 </html>

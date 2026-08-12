@@ -72,6 +72,7 @@ body{font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif;background:#
     <button class="day-btn active" onclick="setDays(7)">近 7 天</button>
     <button class="day-btn" onclick="setDays(30)">近 30 天</button>
     <button class="day-btn" onclick="setDays(90)">近 90 天</button>
+    <button class="day-btn" style="margin-left:auto;background:#8A4DFF;color:#fff;border-color:#8A4DFF" onclick="openSupportersModal()">赞赏者管理</button>
   </div>
 
   <div id="main-content"><div class="loading">加载中...</div></div>
@@ -87,10 +88,10 @@ function setDays(d) {
   event.target.classList.add('active');
   loadStats();
 
-// 自动刷新（每60秒）
+// 自动刷新（每30分钟）
 setInterval(() => {
   loadStats();
-}, 60000);
+}, 1800000);
 }
 
 const TAB_NAMES = {runs:'阵容查询', winrate:'胜率查询', partner:'最佳搭档', topcard:'职业榜单', feedback:'意见反馈', stats:'数据看板'};
@@ -112,14 +113,16 @@ async function loadStats() {
     const d = await resp.json();
     renderStats(d);
     const now = new Date().toLocaleString('zh-CN');
-    document.getElementById('update-time').textContent = '最后更新：' + now + '  · 统计周期：近 ' + _days + ' 天  · 60s 后自动刷新';
+    document.getElementById('update-time').textContent = '最后更新：' + now + '  · 统计周期：近 ' + _days + ' 天  · 30min 后自动刷新';
     // 倒计时
-    let countdown = 60;
+    let countdown = 1800;
     clearInterval(window._countdownTimer);
     window._countdownTimer = setInterval(() => {
       countdown--;
       const el = document.getElementById('update-time');
-      if (el) el.textContent = '最后更新：' + now + '  · 统计周期：近 ' + _days + ' 天  · ' + countdown + 's 后自动刷新';
+      const mins = Math.floor(countdown / 60), secs = countdown % 60;
+      const countdownStr = mins > 0 ? mins + 'm' + (secs > 0 ? secs + 's' : '') : secs + 's';
+      if (el) el.textContent = '最后更新：' + now + '  · 统计周期：近 ' + _days + ' 天  · ' + countdownStr + ' 后自动刷新';
       if (countdown <= 0) clearInterval(window._countdownTimer);
     }, 1000);
   } catch(e) {
@@ -277,10 +280,326 @@ function renderStats(d) {
 
 loadStats();
 
-// 自动刷新（每60秒）
+// 自动刷新（每30分钟）
 setInterval(() => {
   loadStats();
-}, 60000);
+}, 1800000);
 </script>
+
+<!-- 赞赏者管理模态框 -->
+<div class="modal-overlay" id="supporters-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>赞赏者管理</h3>
+      <button class="modal-close" onclick="closeSupportersModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center">
+        <button class="btn-primary" onclick="showAddForm()">+ 新增</button>
+        <span style="color:#6b7280;font-size:13px;margin-left:auto" id="supporters-count">-</span>
+      </div>
+
+      <!-- 新增/编辑表单 -->
+      <div id="supporter-form" style="display:none;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:16px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px" id="form-title">新增赞赏者</div>
+        <input type="hidden" id="edit-id">
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:4px">显示名称</label>
+          <input type="text" id="input-name" placeholder="请输入名称" style="width:100%;padding:8px;background:#0a0e1a;border:1px solid #374151;border-radius:4px;color:#e2e8f0;font-size:14px">
+        </div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="input-visible" checked style="width:16px;height:16px">
+          <label for="input-visible" style="font-size:13px;color:#9ca3af;cursor:pointer">在支持页面公开显示</label>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" onclick="submitSupporter()" style="flex:1">保存</button>
+          <button class="btn-secondary" onclick="hideForm()" style="flex:1">取消</button>
+        </div>
+      </div>
+
+      <!-- 支持者列表 -->
+      <div id="supporters-list" style="max-height:400px;overflow-y:auto">
+        <div class="loading">加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.modal-overlay {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.7);
+  z-index:999;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+.modal-overlay.open { display:flex; }
+.modal {
+  background:#0d1221;
+  border:1px solid #1f2937;
+  border-radius:8px;
+  max-width:600px;
+  width:100%;
+  max-height:90vh;
+  display:flex;
+  flex-direction:column;
+}
+.modal-header {
+  padding:16px 20px;
+  border-bottom:1px solid #1f2937;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.modal-header h3 {
+  font-size:18px;
+  font-weight:700;
+  color:#e2e8f0;
+  margin:0;
+}
+.modal-close {
+  width:32px;
+  height:32px;
+  border-radius:4px;
+  border:1px solid #374151;
+  background:transparent;
+  color:#9ca3af;
+  cursor:pointer;
+  font-size:20px;
+  line-height:1;
+  transition:all 0.2s;
+}
+.modal-close:hover {
+  border-color:#f59e0b;
+  color:#f59e0b;
+  background:#1a1500;
+}
+.modal-body {
+  padding:20px;
+  overflow-y:auto;
+  flex:1;
+}
+.supporter-item {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 14px;
+  background:#111827;
+  border:1px solid #1f2937;
+  border-radius:6px;
+  margin-bottom:8px;
+  transition:all 0.2s;
+}
+.supporter-item:hover {
+  border-color:#374151;
+  background:#1a1a2e;
+}
+.supporter-name {
+  flex:1;
+  font-size:14px;
+  font-weight:600;
+  color:#e2e8f0;
+}
+.supporter-badge {
+  padding:2px 8px;
+  border-radius:4px;
+  font-size:11px;
+  font-weight:600;
+}
+.badge-visible {
+  background:#065f46;
+  color:#10b981;
+}
+.badge-hidden {
+  background:#450a0a;
+  color:#f87171;
+}
+.btn-icon {
+  width:28px;
+  height:28px;
+  border-radius:4px;
+  border:1px solid #374151;
+  background:transparent;
+  color:#9ca3af;
+  cursor:pointer;
+  font-size:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:all 0.2s;
+  flex-shrink:0;
+}
+.btn-icon:hover {
+  border-color:#3b82f6;
+  color:#3b82f6;
+  background:#1e3a8a20;
+}
+.btn-icon.danger:hover {
+  border-color:#dc2626;
+  color:#dc2626;
+  background:#7f1d1d20;
+}
+.btn-primary {
+  padding:8px 16px;
+  border-radius:6px;
+  border:none;
+  background:#f59e0b;
+  color:#0a0e1a;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  transition:all 0.2s;
+}
+.btn-primary:hover {
+  background:#fbbf24;
+}
+.btn-secondary {
+  padding:8px 16px;
+  border-radius:6px;
+  border:1px solid #374151;
+  background:transparent;
+  color:#9ca3af;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  transition:all 0.2s;
+}
+.btn-secondary:hover {
+  border-color:#f59e0b;
+  color:#f59e0b;
+  background:#1a1500;
+}
+</style>
+
+<script>
+let supportersData = [];
+
+function openSupportersModal() {
+  document.getElementById('supporters-modal').classList.add('open');
+  loadSupporters();
+}
+
+function closeSupportersModal() {
+  document.getElementById('supporters-modal').classList.remove('open');
+  hideForm();
+}
+
+async function loadSupporters() {
+  try {
+    const resp = await fetch('/api/admin/supporters');
+    const data = await resp.json();
+    supportersData = data.supporters || [];
+    renderSupporters();
+  } catch (e) {
+    document.getElementById('supporters-list').innerHTML = '<div style="color:#f87171;text-align:center;padding:20px">加载失败</div>';
+  }
+}
+
+function renderSupporters() {
+  const list = document.getElementById('supporters-list');
+  document.getElementById('supporters-count').textContent = `共 ${supportersData.length} 位`;
+  
+  if (!supportersData.length) {
+    list.innerHTML = '<div style="color:#6b7280;text-align:center;padding:32px">暂无数据</div>';
+    return;
+  }
+  
+  list.innerHTML = supportersData.map(s => `
+    <div class="supporter-item">
+      <div class="supporter-name">${s.displayName}</div>
+      <span class="supporter-badge ${s.visible ? 'badge-visible' : 'badge-hidden'}">${s.visible ? '公开' : '隐藏'}</span>
+      <button class="btn-icon" onclick="toggleVisible(${s.id}, ${!s.visible})" title="${s.visible ? '隐藏' : '公开'}">
+        ${s.visible ? '👁️' : '🚫'}
+      </button>
+      <button class="btn-icon" onclick="editSupporter(${s.id})" title="编辑">✏️</button>
+      <button class="btn-icon danger" onclick="deleteSupporter(${s.id})" title="删除">🗑️</button>
+    </div>
+  `).join('');
+}
+
+function showAddForm() {
+  document.getElementById('form-title').textContent = '新增赞赏者';
+  document.getElementById('edit-id').value = '';
+  document.getElementById('input-name').value = '';
+  document.getElementById('input-visible').checked = true;
+  document.getElementById('supporter-form').style.display = 'block';
+  setTimeout(() => document.getElementById('input-name').focus(), 50);
+}
+
+function editSupporter(id) {
+  const s = supportersData.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('form-title').textContent = '编辑赞赏者';
+  document.getElementById('edit-id').value = id;
+  document.getElementById('input-name').value = s.displayName;
+  document.getElementById('input-visible').checked = s.visible;
+  document.getElementById('supporter-form').style.display = 'block';
+  setTimeout(() => document.getElementById('input-name').focus(), 50);
+}
+
+function hideForm() {
+  document.getElementById('supporter-form').style.display = 'none';
+}
+
+async function submitSupporter() {
+  const id = document.getElementById('edit-id').value;
+  const name = document.getElementById('input-name').value.trim();
+  const visible = document.getElementById('input-visible').checked;
+  
+  if (!name) {
+    alert('请输入名称');
+    return;
+  }
+  
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/admin/supporters/${id}` : '/api/admin/supporters';
+  
+  try {
+    const resp = await fetch(url, {
+      method,
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({displayName: name, visible})
+    });
+    if (resp.ok) {
+      hideForm();
+      loadSupporters();
+    } else {
+      alert('保存失败：' + resp.status);
+    }
+  } catch (e) {
+    alert('网络错误');
+  }
+}
+
+async function toggleVisible(id, visible) {
+  const s = supportersData.find(x => x.id === id);
+  if (!s) return;
+  try {
+    const resp = await fetch(`/api/admin/supporters/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({displayName: s.displayName, visible, order: s.order})
+    });
+    if (resp.ok) loadSupporters();
+  } catch (e) {
+    alert('操作失败');
+  }
+}
+
+async function deleteSupporter(id) {
+  const s = supportersData.find(x => x.id === id);
+  if (!s || !confirm(`确认删除「${s.displayName}」？`)) return;
+  try {
+    const resp = await fetch(`/api/admin/supporters/${id}`, {method: 'DELETE'});
+    if (resp.ok) loadSupporters();
+  } catch (e) {
+    alert('删除失败');
+  }
+}
+</script>
+
 </body>
 </html>
