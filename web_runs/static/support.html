@@ -401,14 +401,15 @@ body::before {
 
 /* 二维码容器 */
 .qrcode-wrap {
-  background: #fff;
+  background: transparent;
+  border: 1px solid rgba(38, 217, 242, 0.55);
   border-radius: 6px;
-  padding: 16px;
+  padding: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 20px;
-  /* 保持白底，不加深色滤镜 */
+  box-shadow: 0 0 14px rgba(38, 217, 242, 0.18);
 }
 
 .qrcode-wrap img {
@@ -755,15 +756,7 @@ footer a:hover {
     <div class="qrcode-wrap">
       <!-- 二维码图片路径 - 配置位置：/static/wechat_qr.png -->
       <!-- 有赞赏码后替换下方占位符：将 id="qr-placeholder" 整块替换为 <img src="/static/wechat_qr.png" alt="微信赞赏码" width="220" height="220"> -->
-      <div class="qrcode-placeholder" id="qr-placeholder" aria-label="二维码占位，待上传微信赞赏码图片">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
-          <rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/>
-          <rect x="18" y="18" width="3" height="3"/>
-        </svg>
-        <span>赞赏码上传中</span>
-      </div>
+      <img src="/static/wechat_qr.png" alt="微信赞赏码" width="220" height="220">
     </div>
     <p class="modal-hint" id="modal-hint">
       如果希望出现在支持者名单中，<br>
@@ -790,7 +783,7 @@ footer a:hover {
 /* ============ 配置 ============ */
 const CONFIG = {
   qrcodePath: '/static/wechat_qr.png',   // 微信赞赏码图片路径
-  supportersAPI: '/static/supporters.json', // 支持者数据路径
+  supportersAPI: '/api/supporters', // 支持者数据接口
   maxVisible: 20,                          // 默认展示人数
 };
 
@@ -844,7 +837,7 @@ async function loadSupporters() {
   try {
     const resp = await fetch(CONFIG.supportersAPI);
     const data = await resp.json();
-    allSupporters = (data.supporters || []).filter(s => s.visible);
+    allSupporters = data.supporters || [];
     renderSupporters();
   } catch (e) {
     renderSupporters();
