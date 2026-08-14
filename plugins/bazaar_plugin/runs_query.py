@@ -152,8 +152,9 @@ class RunsQuery:
         if not self.conn:
             self.load()
 
-        sql = "SELECT id, hero, username, created_at, items_json, skills_json, stat_wins, stat_losses, screenshot_url FROM runs WHERE season=?"
-        params = [CURRENT_SEASON_ID]
+        # 默认只展示当前补丁阶段的阵容，避免旧补丁数据混入。
+        sql = "SELECT id, hero, username, created_at, items_json, skills_json, stat_wins, stat_losses, screenshot_url FROM runs WHERE season=? AND phase=?"
+        params = [CURRENT_SEASON_ID, CURRENT_PHASE]
 
         if hero:
             sql += " AND LOWER(hero) = LOWER(?)"

@@ -548,6 +548,10 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "") -> str
             cd = tier_attrs.get("CooldownMax")
             if cd:
                 lines.append(f"冷却{ms_to_s(cd)}s")
+            # AmmoMax 不会自动出现在 tooltip 中；单独展示以避免不同品质被误合并。
+            ammo = tier_attrs.get("AmmoMax")
+            if ammo is not None:
+                lines.append(f"弹药{int(ammo)}")
             multicast = tier_attrs.get("Multicast", 1)
             if multicast and multicast > 1:
                 lines.append(f"多重x{int(multicast)}")
