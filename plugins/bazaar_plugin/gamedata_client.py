@@ -155,6 +155,39 @@ def build_tier_attrs(item_data: dict, tier_name: str) -> dict:
     return base
 
 
+def annotate_implicit_ability_attributes(text: str, abilities: dict) -> str:
+    """为省略属性名的 {ability.X} 补全伤害/治疗/护盾等单位。
+
+    仅当该占位符之后、下一占位符之前的模板片段没有写出对应属性时追加，
+    因此不会把“造成{ability.X}伤害”渲染为“伤害伤害”。
+    """
+    attr_zh = {
+        "DamageAmount": "伤害",
+        "HealAmount": "治疗",
+        "ShieldApplyAmount": "护盾",
+        "ShieldAmount": "护盾",
+        "PoisonApplyAmount": "剧毒",
+        "BurnApplyAmount": "灼烧",
+        "RegenApplyAmount": "生命再生",
+    }
+    matches = list(re.finditer(r"\{ability\.([^}.]+)\}", text))
+    if not matches:
+        return text
+    parts, pos = [], 0
+    effect_words = tuple(set(attr_zh.values()))
+    for index, match in enumerate(matches):
+        parts.append(text[pos:match.end()])
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        following = text[match.end():next_start]
+        action = (abilities.get(match.group(1)) or {}).get("Action") or {}
+        label = attr_zh.get(action.get("AttributeType", ""))
+        if label and not any(word in following for word in effect_words):
+            parts.append(label)
+        pos = match.end()
+    parts.append(text[pos:])
+    return "".join(parts)
+
+
 def render_tooltip(
     text: str,
     abilities: dict,
@@ -564,6 +597,7 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "") -> str
                 if txt:
                     # 先取中文模板（保留占位符），再渲染数值
                     zh_tpl = trans.get_tooltip_zh(txt) or txt
+                    zh_tpl = annotate_implicit_ability_attributes(zh_tpl, abilities)
                     rendered = render_tooltip(zh_tpl, abilities, auras, tier_attrs)
                     lines.append(rendered)
             if lines == prev_block:
