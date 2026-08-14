@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>巴扎丘Bot</title>
-<meta name="description" content="The Bazaar 中文社区数据平台。查询阵容、胜率统计、物品搭配分析，数据来自天梯真实对战。">
+<title>职业榜单 | 巴扎丘Bot</title>
+<meta name="description" content="查看 The Bazaar 各职业物品的真实 10 胜率榜单。">
 <meta name="keywords" content="The Bazaar,巴扎,阵容查询,胜率,天梯,卡牌,攻略,凡妮莎,杜利,马克,皮格,斯黛拉,朱尔斯,卡诺克,双龙">
 <meta name="author" content="BazaarQiuBot">
 <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
 <meta property="og:url" content="https://bazaarqiubot.com">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="巴扎丘Bot">
-<link rel="canonical" href="https://bazaarqiubot.com">
+<link rel="canonical" href="https://bazaarqiubot.com/topcard">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐉</text></svg>">
 <style>
 /* ============================================
@@ -34,14 +34,14 @@
   --neon-gold: #F5C76A;
   --text-primary: #F5F4FF;
   --text-secondary: #B5B3D7;
-  
+
   /* 功能色 */
   --border-dim: rgba(138, 77, 255, 0.15);
   --border-bright: rgba(38, 217, 242, 0.4);
   --glow-magenta: 0 0 20px rgba(244, 56, 184, 0.5);
   --glow-cyan: 0 0 20px rgba(38, 217, 242, 0.5);
   --glow-violet: 0 0 16px rgba(138, 77, 255, 0.4);
-  
+
   /* 胜率渐变 */
   --win-high: #36E3C1;
   --win-mid: #F5C76A;
@@ -59,7 +59,7 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background: var(--bg-deep);
-  background-image: 
+  background-image:
     linear-gradient(rgba(138, 77, 255, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(138, 77, 255, 0.03) 1px, transparent 1px);
   background-size: 24px 24px;
@@ -1080,11 +1080,11 @@ footer a:hover {
     gap: 12px;
     align-items: flex-start;
   }
-  
+
   .logo {
     font-size: 18px;
   }
-  
+
   .nav-tabs {
     width: 100%;
     overflow-x: auto;
@@ -1093,96 +1093,96 @@ footer a:hover {
     scrollbar-width: none;
     gap: 6px;
   }
-  
+
   .nav-tabs::-webkit-scrollbar {
     display: none;
   }
-  
+
   .nav-tab {
     font-size: 13px;
     padding: 8px 14px;
     flex-shrink: 0;
   }
-  
+
   .main {
     padding: 24px 12px;
   }
-  
+
   .form-card {
     padding: 16px;
   }
-  
+
   .form-row {
     flex-direction: column;
     gap: 10px;
   }
-  
+
   .form-group {
     width: 100%;
   }
-  
+
   input, select {
     width: 100%;
     min-width: auto;
   }
-  
+
   .btn {
     width: 100%;
     justify-content: center;
   }
-  
+
   .winrate-card {
     padding: 24px 16px;
   }
-  
+
   .winrate-big {
     font-size: 56px;
   }
-  
+
   .winrate-bar-wrap {
     width: 100%;
     max-width: 260px;
   }
-  
+
   .winrate-stats {
     gap: 24px;
   }
-  
+
   .topcard-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .run-item {
     flex-wrap: wrap;
     gap: 8px;
   }
-  
+
   .run-hero {
     order: -1;
   }
-  
+
   .run-meta {
     width: 100%;
   }
-  
+
   .win-badge {
     margin-left: auto;
   }
-  
+
   .partner-item {
     flex-wrap: wrap;
     gap: 10px;
   }
-  
+
   .partner-rank {
     width: 20px;
   }
-  
+
   .partner-bar-wrap {
     width: 100%;
     max-width: none;
   }
-  
+
   footer {
     margin-top: 40px;
     padding: 24px 12px;
@@ -1314,15 +1314,15 @@ footer a:hover {
   .fb-layout {
     grid-template-columns: 1fr;
   }
-  
+
   .fb-form-card {
     position: static;
   }
-  
+
   .topcard-controls {
     flex-direction: column;
   }
-  
+
   .topcard-controls .form-group {
     width: 100%;
   }
@@ -1482,124 +1482,19 @@ input[type="file"] {
 </head>
 <body>
 <nav class="navbar">
-  <div class="logo">巴扎丘Bot</div>
+  <a href="/runs" class="logo">巴扎丘Bot</a>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="switchTab('runs')">阵容查询</button>
-    <button class="nav-tab" onclick="switchTab('winrate')">胜率查询</button>
-    <button class="nav-tab" onclick="switchTab('partner')">最佳搭档</button>
-    <button class="nav-tab" onclick="switchTab('topcard')">职业榜单</button>
+    <a href="/runs" class="nav-tab">阵容查询</a>
+    <a href="/winrate" class="nav-tab">胜率查询</a>
+    <a href="/partner" class="nav-tab">最佳搭档</a>
+    <a href="/topcard" class="nav-tab active">职业榜单</a>
     <a href="/trivia" class="nav-tab">冷知识</a>
-    <button class="nav-tab" onclick="switchTab('feedback')">意见反馈</button>
+    <a href="/feedback" class="nav-tab">意见反馈</a>
     <a href="/support" class="nav-tab">支持</a>
   </div>
 </nav>
-<div class="main">
-<div id="suggest-area" style="margin-bottom:24px;display:none">
-  <div class="form-card" style="padding:18px 24px">
-    <div style="margin-bottom:14px">
-      <div class="suggest-title">🔥 热门英雄</div>
-      <div class="suggest-chips" id="suggest-heroes"></div>
-    </div>
-    <div>
-      <div class="suggest-title">🃏 热门卡牌</div>
-      <div class="suggest-chips" id="suggest-cards"></div>
-    </div>
-  </div>
-</div>
-<div id="panel-runs" class="panel active">
-  <div class="form-card">
-    <div class="form-title">🃏 阵容查询</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>英雄</label>
-        <select id="runs-hero">
-          <option value="">全部英雄</option>
-          <option value="凡妮莎">凡妮莎</option>
-          <option value="杜利">杜利</option>
-          <option value="马克">马克</option>
-          <option value="皮格">皮格</option>
-          <option value="斯黛拉">斯黛拉</option>
-          <option value="朱尔斯">朱尔斯</option>
-          <option value="卡诺克">卡诺克</option>
-          <option value="双龙">双龙</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>卡牌（+分隔多张）</label>
-        <input id="runs-cards" type="text" placeholder="如：火炮阵列+赛博铁尺">
-      </div>
-      <div class="form-group">
-        <label>最低胜场</label>
-        <select id="runs-wins">
-          <option value="10">10胜</option>
-          <option value="9">9胜</option>
-          <option value="8">8胜</option>
-          <option value="7">7胜</option>
-          <option value="1">全部</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>天数</label>
-        <input id="runs-days" type="number" placeholder="不限" min="1" style="width:90px">
-      </div>
-      <button class="btn btn-primary" onclick="queryRuns(1)">查询</button>
-    </div>
-  </div>
-  <div id="runs-error"></div>
-  <div id="runs-result"></div>
-</div>
-<div id="panel-winrate" class="panel">
-  <div class="form-card">
-    <div class="form-title">📊 10胜率查询</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>卡牌（+分隔多张）</label>
-        <input id="wr-cards" type="text" placeholder="如：火炮阵列+深海弯刀" style="min-width:220px">
-      </div>
-      <div class="form-group">
-        <label>英雄（可选）</label>
-        <select id="wr-hero">
-          <option value="">不限</option>
-          <option value="凡妮莎">凡妮莎</option>
-          <option value="杜利">杜利</option>
-          <option value="马克">马克</option>
-          <option value="皮格">皮格</option>
-          <option value="斯黛拉">斯黛拉</option>
-          <option value="朱尔斯">朱尔斯</option>
-          <option value="卡诺克">卡诺克</option>
-          <option value="双龙">双龙</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>天数</label>
-        <input id="wr-days" type="number" placeholder="不限" min="1" style="width:90px">
-      </div>
-      <button class="btn btn-primary" onclick="queryWinrate()">查询</button>
-    </div>
-  </div>
-  <div id="wr-error"></div>
-  <div id="wr-result"></div>
-</div>
-<div id="panel-partner" class="panel">
-  <div class="form-card">
-    <div class="form-title">🤝 最佳搭档查询</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>卡牌名称</label>
-        <input id="pt-card" type="text" placeholder="如：火炮阵列" style="min-width:200px">
-      </div>
-      <div class="form-group">
-        <label>天数</label>
-        <input id="pt-days" type="number" placeholder="不限" min="1" style="width:90px">
-      </div>
-      <button class="btn btn-primary" onclick="queryPartner()">查询</button>
-    </div>
-  </div>
-  <div id="pt-error"></div>
-  <div id="pt-result"></div>
-</div>
-</div>
-<div id="panel-topcard" class="panel">
+<div class="main page-topcard">
+<div id="panel-topcard" class="panel active">
   <div class="topcard-controls">
     <div class="form-group">
       <label>显示 Top N</label>
@@ -1621,32 +1516,7 @@ input[type="file"] {
   </div>
   <div id="topcard-result"><div class="loading">加载中...</div></div>
 </div>
-
-<div id="panel-feedback" class="panel">
-  <div class="fb-layout">
-    <div class="fb-left">
-      <div class="fb-form-card">
-        <div class="fb-form-title">✍️ 提交反馈</div>
-        <div id="fb-success" class="fb-success">✅ 提交成功！</div>
-        <textarea id="fb-content" class="fb-textarea" placeholder="说说你的想法、建议或遇到的问题..." maxlength="2000"></textarea>
-        <div class="fb-upload-area">
-          <label for="fb-img-input">
-            <input type="file" id="fb-img-input" accept="image/*" onchange="previewImage(event)">
-            <div class="fb-upload-hint">📷 点击上传图片（可选）</div>
-          </label>
-          <img id="fb-preview" class="fb-preview">
-        </div>
-        <input id="fb-contact" class="fb-contact-input" placeholder="留下联系方式：微信/QQ/邮箱（可选）" maxlength="100">
-        <button class="fb-submit-btn" onclick="submitFeedback()">提交反馈</button>
-      </div>
-    </div>
-    <div class="fb-right">
-      <div id="fb-list" class="masonry"></div>
-      <button id="fb-loadmore" class="fb-load-more" style="display:none" onclick="loadMoreFeedback()">加载更多</button>
-    </div>
-  </div>
 </div>
-
 <script>
 const HEROES = {凡妮莎:'Vanessa',杜利:'Dooley',马克:'Mak',皮格:'Pygmalien',斯黛拉:'Stelle',朱尔斯:'Jules',卡诺克:'Karnok',双龙:'The Dragons'};
 let lastQuery = 0;
@@ -2183,7 +2053,8 @@ function trackPV(tab) {
 
 // 首次进入上报
 window.addEventListener('DOMContentLoaded', () => {
-  trackPV('runs');
+  trackPV('topcard');
+  loadTopcard();
 });
 
 </script>

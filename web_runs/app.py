@@ -678,8 +678,25 @@ def api_stats_overview():
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 @app.route('/')
-def index():
-    return send_from_directory('static', 'index.html')
+@app.route('/runs')
+def runs_page():
+    return send_from_directory('static', 'runs.html')
+
+@app.route('/winrate')
+def winrate_page():
+    return send_from_directory('static', 'winrate.html')
+
+@app.route('/partner')
+def partner_page():
+    return send_from_directory('static', 'partner.html')
+
+@app.route('/topcard')
+def topcard_page():
+    return send_from_directory('static', 'topcard.html')
+
+@app.route('/feedback')
+def feedback_page():
+    return send_from_directory('static', 'feedback.html')
 
 @app.route('/support')
 def support():
