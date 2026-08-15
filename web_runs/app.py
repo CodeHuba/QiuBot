@@ -489,6 +489,31 @@ def api_topcard():
         return jsonify({'error': str(e)}), 500
 
 
+
+
+@app.route('/api/comp', methods=['GET'])
+@rate_limit
+def api_comp():
+    from plugins.bazaar_plugin.runs_query import RunsQuery, HERO_ZH_TO_EN
+    hero_raw = request.args.get('hero', '').strip()
+    n = min(max(int(request.args.get('n', 3)), 2), 4)
+    top_k = min(int(request.args.get('top', 10)), 20)
+    all_phases = request.args.get('all_phases') == 'true'
+    ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr))
+    if not hero_raw:
+        return jsonify({'error': '请指定职业'}), 400
+    try:
+        query = RunsQuery()
+        hero = query.resolve_hero(hero_raw)
+        if not hero:
+            return jsonify({'error': f'未知职业: {hero_raw}'}), 400
+        result = query.comp(hero=hero, n=n, top_k=top_k, all_phases=all_phases)
+        _log_query('comp', {'hero': hero_raw, 'n': n}, ip, len(result.get('groups', [])), True)
+        return jsonify(result)
+    except Exception as e:
+        _log_query('comp', {'hero': hero_raw}, ip, 0, False)
+        return jsonify({'error': str(e)}), 500
+
 # ===== Feedback API =====
 FEEDBACK_DB = '/opt/qiubot/data/feedback.db'
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
