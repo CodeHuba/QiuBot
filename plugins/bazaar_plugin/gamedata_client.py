@@ -535,7 +535,7 @@ ENC_ZH    = {
 }
 
 
-def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "") -> str:
+def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_enchants: bool = False) -> str:
     """将 GameData.db 原始 dict 格式化为可读文本（用于 #bz db 输出）。"""
     from . import translations as trans
 
@@ -630,7 +630,7 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "") -> str
 
     # 附魔
     enchs = raw.get("Enchantments") or {}
-    if enchs:
+    if enchs and show_enchants:
         out.append("─")
         out.append("附魔效果:")
         for enc_key, enc_data in enchs.items():
@@ -640,6 +640,9 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "") -> str
                 out.append(f"  [{enc_name}] " + "  ".join(tips))
             else:
                 out.append(f"  [{enc_name}]")
+    elif enchs and not show_enchants:
+        out.append("─")
+        out.append(f"附魔: {len(enchs)} 种 (使用 -e 参数查看详情)")
 
     return "\n".join(out)
 

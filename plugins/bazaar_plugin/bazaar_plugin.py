@@ -1099,11 +1099,16 @@ class BazaarPlugin(NcatBotPlugin):
         """查询卡牌数据（优先本地 GameData.db，fallback bazaardb.gg）"""
         from . import gamedata_client as gdc
         from . import translations as trans
-        import asyncio, os
+        from . import card_image_helper as cih
+        import asyncio, os, re
         loop = asyncio.get_event_loop()
 
-        en_name = arg.strip()
-        if trans.has_chinese(arg):
+        # 解析参数
+        show_enchants = '--enchants' in arg or '-e' in arg
+        query_arg = re.sub(r'--enchants|-e', '', arg).strip()
+        
+        en_name = query_arg.strip()
+        if trans.has_chinese(query_arg):
             candidates = trans.search_zh(arg, limit=3)
             if candidates:
                 en_name = candidates[0]
@@ -1121,11 +1126,16 @@ class BazaarPlugin(NcatBotPlugin):
 
         if raw is not None:
             zh = trans.get_zh(en_name) or ""
-            return gdc.format_card_from_raw(raw, zh_name=zh, db_path=db_path)
+            text = gdc.format_card_from_raw(raw, zh_name=zh, db_path=db_path, show_enchants=show_enchants)
+            card_id = raw.get("Id", "")
+            art_url = cih.get_art_url(card_id=card_id, internal_name=en_name, size="artLarge")
+            if art_url:
+                return f"[CQ:image,file={art_url}]\n" + text
+            return text
 
         from . import bazaardb_client as bdb
         try:
-            card = await loop.run_in_executor(None, bdb.query_card_by_name, arg)
+            card = await loop.run_in_executor(None, bdb.query_card_by_name, query_arg)
         except Exception as e:
             return f"[巴扎] 查询失败: {e}"
         if card is None:
@@ -1139,7 +1149,11 @@ class BazaarPlugin(NcatBotPlugin):
             else:
                 names = "、".join(r.get("name", "?") for r in results[:5])
                 return f"找到多个结果: {names}\n请用更精确的名字重试，如: #bz db 万剑之王"
-        return bdb.format_card(card)
+        text = bdb.format_card(card, show_enchants=show_enchants)
+        art_url = card.get("ArtLarge") or card.get("Art", "")
+        if art_url:
+            return f"[CQ:image,file={art_url}]\n" + text
+        return text
 
 
     async def _cmd_runs(self, arg: str) -> str:

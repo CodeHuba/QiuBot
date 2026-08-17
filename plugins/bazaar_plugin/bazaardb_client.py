@@ -250,7 +250,7 @@ def _resolve_tooltip_text(tooltips: list, replacements: dict, tier_name: str) ->
     return result
 
 
-def format_card_brief(card: dict, zh_name: str = "") -> str:
+def format_card_brief(card: dict, zh_name: str = "", show_enchants: bool = False) -> str:
     """把 card dict 格式化为 QQ 消息文本。"""
     from . import translations as trans
 
