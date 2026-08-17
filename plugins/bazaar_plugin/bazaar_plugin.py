@@ -342,12 +342,15 @@ class BazaarPlugin(NcatBotPlugin):
         # 发图片（群聊/私聊分别处理）
         is_private = getattr(event, "message_type", None) == "private"
         try:
+            import base64
+            from pathlib import Path
+            img_b64 = "base64://" + base64.b64encode(Path(img_path).read_bytes()).decode()
             if is_private:
                 user_id = getattr(event, "user_id", 0)
-                await self.api.post_private_msg(user_id=user_id, image=img_path)
+                await self.api.post_private_msg(user_id=user_id, image=img_b64)
             else:
                 group_id = getattr(event, "group_id", 0)
-                await self.api.post_group_msg(group_id=group_id, image=img_path)
+                await self.api.post_group_msg(group_id=group_id, image=img_b64)
         except Exception as e:
             print(f"[{self.name}] 图片发送失败，fallback 文字: {e}")
             return fmt.format_player_stat(username, data)
@@ -376,12 +379,15 @@ class BazaarPlugin(NcatBotPlugin):
 
         is_private = getattr(event, "message_type", None) == "private"
         try:
+            import base64
+            from pathlib import Path
+            img_b64 = "base64://" + base64.b64encode(Path(img_path).read_bytes()).decode()
             if is_private:
                 user_id = getattr(event, "user_id", 0)
-                await self.api.post_private_msg(user_id=user_id, image=img_path)
+                await self.api.post_private_msg(user_id=user_id, image=img_b64)
             else:
                 group_id = getattr(event, "group_id", 0)
-                await self.api.post_group_msg(group_id=group_id, image=img_path)
+                await self.api.post_group_msg(group_id=group_id, image=img_b64)
         except Exception as e:
             print(f"[{self.name}] history图片发送失败: {e}")
             return f"[巴扎] 图片发送失败: {e}"

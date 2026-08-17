@@ -505,6 +505,15 @@ class RunsQuery:
         """
         import json as _json
         from datetime import datetime as _dt, timedelta as _td
+        import time as _time
+
+        # 读取缓存
+        global _topcard_cache, _topcard_cache_ttl
+        _tc_key = (hero, top_n, days, all_phases)
+        if _tc_key in _topcard_cache:
+            _cached, _exp = _topcard_cache[_tc_key]
+            if _time.time() < _exp:
+                return _cached
 
         if not self.conn:
             self.load()
@@ -571,13 +580,232 @@ class RunsQuery:
                     'Karnok': '兽人/卡诺克', 'The Dragons': '双龙'}
         hero_zh = hero_map.get(hero, hero)
 
-        return {
+        _tc_result = {
             'hero': hero,
             'hero_zh': hero_zh,
             'top': top,
             'total_runs': len(rows),
             'days': days,
         }
+        _topcard_cache[_tc_key] = (_tc_result, _time.time() + _topcard_cache_ttl)
+        return _tc_result
+
+    def comp(self,
+             hero: str,
+             n: int = 3,
+             top_k: int = 10,
+             min_count: int = 50,
+             min_config_count: int = 5,  # 新增：完整配置最低场次
+             all_phases: bool = False) -> dict:
+        """
+        阵容聚类榜单（威尔逊置信区间评分）：
+        1. 枚举所有 n 张卡组合（忽略品质/附魔）
+        2. 使用威尔逊置信区间下界作为评分（自动根据样本量折扣）
+        3. 取评分最高的 top_k 组
+        4. 每组内完整配置至少出现 min_config_count 次，按威尔逊评分取前 3
+        """
+        import json as _json
+        from itertools import combinations
+        import math
+        import time
+
+        # 读取缓存
+        global _comp_cache, _comp_cache_ttl
+        cache_key = (hero, n)
+        if cache_key in _comp_cache:
+            cached_result, expire_time = _comp_cache[cache_key]
+            if time.time() < expire_time:
+                return cached_result
+
+        def wilson_score(wins: int, total: int, confidence: float = 0.95) -> float:
+            """
+            威尔逊置信区间下界（Wilson score interval lower bound）
+            自动根据样本量折扣置信度，小样本评分会被大幅降低。
+            confidence=0.95 对应 z=1.96
+            """
+            if total == 0:
+                return 0.0
+            p = wins / total
+            z = 1.96  # 95% 置信度
+            denominator = 1 + z**2 / total
+            center = p + z**2 / (2 * total)
+            margin = z * math.sqrt((p * (1 - p) + z**2 / (4 * total)) / total)
+            lower_bound = (center - margin) / denominator
+            return max(0.0, lower_bound)
+
+        if not self.conn:
+            self.load()
+
+        sql = "SELECT items_json, stat_wins, screenshot_url FROM runs WHERE season=? AND LOWER(hero)=LOWER(?)"
+        params = [CURRENT_SEASON_ID, hero]
+        if not all_phases:
+            sql += " AND phase=?"
+            params.append(CURRENT_PHASE)
+        rows = self.conn.execute(sql, params).fetchall()
+
+        # 解析每局的 cardId 集合
+        runs_data = []
+        for items_json, wins, screenshot_url in rows:
+            try:
+                items = _json.loads(items_json) if items_json else []
+                if not items:
+                    continue
+                card_ids = tuple(item['cardId'] for item in items if 'cardId' in item)
+                if len(card_ids) < n:
+                    continue
+                # frozenset 忽略位置顺序，用于完整配置去重
+                card_ids_set = frozenset(card_ids)
+                runs_data.append((card_ids, card_ids_set, int(wins or 0) >= 10, items, screenshot_url or ''))
+            except Exception:
+                continue
+
+        total_runs = len(runs_data)
+        if total_runs == 0:
+            return {'hero': hero, 'groups': [], 'total_runs': 0, 'n': n}
+
+        # 阶段1：枚举所有 n 张卡组合，计算威尔逊评分
+        from collections import defaultdict
+        combo_stats = defaultdict(lambda: {'count': 0, 'wins': 0, 'full_decks': defaultdict(lambda: {'count': 0, 'wins': 0})})
+        
+        # full_decks_sample: 记录每个 frozenset 对应的一个 items 样本（用于展示）
+        full_decks_sample = {}
+
+        full_decks_screenshot = {}  # frozenset -> screenshot_url（取第一张有图的）
+
+        for card_ids, card_ids_set, is_win, items, screenshot_url in runs_data:
+            for combo in combinations(sorted(card_ids_set), n):
+                combo_stats[combo]['count'] += 1
+                if is_win:
+                    combo_stats[combo]['wins'] += 1
+                # 用 frozenset 作 key（忽略位置）
+                combo_stats[combo]['full_decks'][card_ids_set]['count'] += 1
+                if is_win:
+                    combo_stats[combo]['full_decks'][card_ids_set]['wins'] += 1
+                # 记录样本 items（只记一次）
+                if card_ids_set not in full_decks_sample:
+                    full_decks_sample[card_ids_set] = items
+                # 记录截图：优先取10胜的截图，没有10胜截图才取普通截图
+                if screenshot_url:
+                    if is_win and card_ids_set not in full_decks_screenshot:
+                        full_decks_screenshot[card_ids_set] = screenshot_url
+                    elif not is_win and card_ids_set not in full_decks_screenshot:
+                        full_decks_screenshot[card_ids_set] = screenshot_url
+
+        # 过滤低频组，计算威尔逊评分
+        valid_combos = []
+        for combo, stats in combo_stats.items():
+            if stats['count'] < min_count:
+                continue
+            胜率 = stats['wins'] / stats['count'] if stats['count'] > 0 else 0
+            出场率 = stats['count'] / total_runs
+            # 威尔逊评分作为主评分
+            wilson = wilson_score(stats['wins'], stats['count'])
+            # 组评分 = 威尔逊 × 0.7 + 出场率 × 0.3（保留出场率作为次要因素）
+            组评分 = wilson * 0.7 + 出场率 * 0.3
+            valid_combos.append((combo, stats, 组评分, 出场率, 胜率, wilson))
+
+        # 按组评分排序
+        valid_combos.sort(key=lambda x: -x[2])
+        top_combos = valid_combos[:top_k]
+
+        # 阶段2：对每组，找前 3 完整卡组（过滤低频 + 威尔逊评分）
+        result_groups = []
+        for combo, stats, 组评分, 出场率, 胜率, wilson in top_combos:
+            # 核心卡信息
+            core_cards = []
+            for cid in combo:
+                info = self.card_mapping.get(cid, {})
+                name_en = info.get('name', cid)
+                name_zh = self.get_zh_name(name_en)
+                img = self.tex_map.get(name_en, '')
+                core_cards.append({
+                    'cardId': cid,
+                    'name_zh': name_zh if name_zh != name_en else name_en,
+                    'name_en': name_en,
+                    'img': img,
+                })
+
+            # 完整卡组评分（过滤 < min_config_count）
+            full_deck_scores = []
+            for deck_set, deck_stat in stats['full_decks'].items():
+                if deck_stat['count'] < min_config_count:
+                    continue
+                deck_胜率 = deck_stat['wins'] / deck_stat['count'] if deck_stat['count'] > 0 else 0
+                deck_出场率 = deck_stat['count'] / total_runs
+                deck_wilson = wilson_score(deck_stat['wins'], deck_stat['count'])
+                deck_评分 = deck_wilson * 0.7 + deck_出场率 * 0.3
+                full_deck_scores.append((deck_set, deck_stat, deck_评分, deck_出场率, deck_胜率, deck_wilson))
+
+            full_deck_scores.sort(key=lambda x: -x[2])
+            top3_decks = full_deck_scores[:3]
+
+            # 构建前 3 完整卡组
+            configs = []
+            for deck_set, deck_stat, deck_评分, deck_出场率, deck_胜率, deck_wilson in top3_decks:
+                # 用样本 items 展示（保留原始顺序）
+                sample_items = full_decks_sample.get(deck_set, [])
+                cards_info = []
+                for cid in [it['cardId'] for it in sample_items if 'cardId' in it]:
+                    info = self.card_mapping.get(cid, {})
+                    name_en = info.get('name', cid)
+                    name_zh = self.get_zh_name(name_en)
+                    img = self.tex_map.get(name_en, '')
+                    is_core = cid in combo
+                    cards_info.append({
+                        'cardId': cid,
+                        'name_zh': name_zh if name_zh != name_en else name_en,
+                        'name_en': name_en,
+                        'img': img,
+                        'is_core': is_core,
+                    })
+                configs.append({
+                    'cards': cards_info,
+                    'count': deck_stat['count'],
+                    'wins': deck_stat['wins'],
+                    'rate': deck_胜率,
+                    'appearance_rate': deck_出场率,
+                    'score': deck_评分,
+                    'wilson': deck_wilson,
+                    'screenshot': full_decks_screenshot.get(deck_set, ''),
+                })
+
+            result_groups.append({
+                'core_cards': core_cards,
+                'count': stats['count'],
+                'wins': stats['wins'],
+                'rate': 胜率,
+                'appearance_rate': 出场率,
+                'score': 组评分,
+                'wilson': wilson,
+                'configs': configs,
+            })
+
+        hero_map = {'Vanessa': '海盗/凡妮莎', 'Dooley': '工程师/杜利',
+                    'Mak': '法师/马克', 'Pygmalien': '猪/皮格',
+                    'Stelle': '机甲/斯黛拉', 'Jules': '吸血鬼/朱尔斯',
+                    'Karnok': '兽人/卡诺克', 'The Dragons': '双龙'}
+
+        result = {
+            'hero': hero,
+            'hero_zh': hero_map.get(hero, hero),
+            'groups': result_groups,
+            'total_runs': total_runs,
+            'n': n,
+        }
+
+        # 写入缓存
+        _comp_cache[cache_key] = (result, time.time() + _comp_cache_ttl)
+        return result
+
+
+# comp 方法内存缓存 {(hero, n): (result, expire_time)}
+_comp_cache: dict = {}
+_comp_cache_ttl = 3600  # 1小时
+
+# topcard 方法内存缓存 {(hero, top_n, days, all_phases): (result, expire_time)}
+_topcard_cache: dict = {}
+_topcard_cache_ttl = 3600  # 1小时
+
 _client = None
 
 def get_client() -> RunsQuery:

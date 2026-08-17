@@ -140,6 +140,13 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
     if isinstance(val, dict) and val.get("$type") == "TFixedValue":
         return val.get("Value"), ""
 
+    # TActionGameSpawnCards / TActionGameDealCards: 读 SpawnContext.Limit
+    if atype in ("TActionGameSpawnCards", "TActionGameDealCards"):
+        spawn_ctx = action.get("SpawnContext", {})
+        limit = spawn_ctx.get("Limit", {})
+        if isinstance(limit, dict) and limit.get("$type") == "TFixedValue":
+            return limit.get("Value"), ""
+
     return None, ""
 
 

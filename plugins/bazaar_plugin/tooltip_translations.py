@@ -179,12 +179,33 @@ def set_version(ver: str):
 
 
 def get_translation(text_en: str, card_name: str = "", tier: str = "") -> str | None:
-    """查缓存,返回中文 tooltip。无缓存返回 None。"""
+    """查缓存,返回中文 tooltip。无缓存返回 None。支持 ? 占位符模糊匹配。"""
+    import re as _re
     if not text_en.strip():
         return None
-    # cache key: card_name|tier|text (text 保证唯一性)
+    # 精确匹配
     key = f"{card_name}|{tier}|{text_en}"
-    return _cache.get(key)
+    result = _cache.get(key)
+    if result:
+        return result
+    # 无 card_name 前缀再试一次
+    for k, v in _cache.items():
+        if k.endswith(f"|{text_en}"):
+            return v
+    # 如果文本含 ?，尝试用正则模糊匹配缓存中的 {ability.X} 格式
+    if "?" in text_en:
+        pattern = _re.escape(text_en).replace(r"\?", r"\?").replace(r"\?", ".+")
+        # 构建可匹配 {ability.X} 的 pattern
+        pat_flex = _re.escape(text_en).replace(r"\?", r"(?:\{[^}]+\}|\d+|\?)")
+        for k, v in _cache.items():
+            cache_text = k.split("|", 2)[-1] if "|" in k else k
+            # 把缓存 key 里的 {ability.X} 替换为 ? 再比较
+            normalized = _re.sub(r"\{[^}]+\}", "?", cache_text)
+            if normalized == text_en:
+                # 找到匹配，返回翻译（保留 ? 占位符）
+                translated = _re.sub(r"\{[^}]+\}", "?", v)
+                return translated
+    return None
 
 
 async def translate_tooltip(text_en: str, card_name: str = "", tier: str = "") -> str:
