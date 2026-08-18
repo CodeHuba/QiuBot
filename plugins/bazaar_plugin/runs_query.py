@@ -765,82 +765,105 @@ class RunsQuery:
                     result.append(c)
             return result
 
+        # 全局独占认领：L2/L3 骨架只能归属一个父节点
+        claimed_l2 = set()  # 已被认领的 L2 骨架
+        claimed_l3 = set()  # 已被认领的 L3 骨架
+
+        def build_configs(l3_skel, l2_skel, decks):
+            merged = []
+            visited = set()
+            for ds_a in decks:
+                if ds_a in visited:
+                    continue
+                m_cnt = deck_stats[ds_a]['count']
+                m_win = deck_stats[ds_a]['wins']
+                m_rep = ds_a
+                visited.add(ds_a)
+                for ds_b in decks:
+                    if ds_b in visited:
+                        continue
+                    if jaccard(ds_a - l3_skel, ds_b - l3_skel) >= 0.80:
+                        m_cnt += deck_stats[ds_b]['count']
+                        m_win += deck_stats[ds_b]['wins']
+                        visited.add(ds_b)
+                        if deck_stats[ds_b]['count'] > deck_stats[ds_a]['count']:
+                            m_rep = ds_b
+                merged.append({
+                    'deck_set': m_rep, 'count': m_cnt, 'wins': m_win,
+                    'win_rate': m_win / m_cnt if m_cnt else 0.0,
+                    'appear_rate': m_cnt / total_runs,
+                })
+            merged = [m for m in merged if m['count'] >= min_config_count]
+            if not merged:
+                return []
+            max_cfg = max(m['appear_rate'] for m in merged)
+            for m in merged:
+                m['score'] = score(m, max_cfg)
+            merged.sort(key=lambda m: -m['score'])
+            configs = []
+            for m in merged[:TOP_CFG]:
+                ds = m['deck_set']
+                items = deck_stats[ds]['items']
+                cards = [card_info(it['cardId'], it['cardId'] in l3_skel, it['cardId'] in (l3_skel - l2_skel))
+                         for it in items if 'cardId' in it]
+                configs.append({
+                    'cards': cards, 'count': m['count'], 'wins': m['wins'],
+                    'rate': m['win_rate'], 'appearance_rate': m['appear_rate'],
+                    'score': m['score'], 'screenshot': deck_stats[ds]['screenshot'],
+                })
+            return configs
+
         layers = []
         for l1_data in l1_stats:
             l1_skel = l1_data['skeleton']
             l1_matched = l1_data['matched_decks']
 
             l2_cands = mine_next(l1_skel, l1_matched, 3)
-            l2_list = []
-            for l2_skel in l2_cands[:TOP_L2]:
+
+            # 先计算所有候选 L2 的 stats 和评分，再按评分排序认领
+            l2_scored = []
+            for l2_skel in l2_cands:
+                if l2_skel in claimed_l2:
+                    continue
                 st2 = compute_stats(l2_skel, l1_matched)
                 if not st2 or st2['count'] < MIN_SUPPORT:
                     continue
-                max_l2 = max((compute_stats(s, l1_matched) or {'appear_rate': 0})['appear_rate']
-                             for s in l2_cands[:TOP_L2])
-                st2['score'] = score(st2, max_l2)
+                l2_scored.append((l2_skel, st2))
+
+            if l2_scored:
+                max_l2 = max(st['appear_rate'] for _, st in l2_scored)
+                for l2_skel, st2 in l2_scored:
+                    st2['score'] = score(st2, max_l2)
+                l2_scored.sort(key=lambda x: -x[1]['score'])
+
+            l2_list = []
+            for l2_skel, st2 in l2_scored[:TOP_L2]:
+                claimed_l2.add(l2_skel)
 
                 l3_cands = mine_next(l2_skel, st2['matched_decks'], 4)
-                l3_list = []
-                for l3_skel in l3_cands[:TOP_L3]:
+
+                # 先计算所有候选 L3 的 stats 和评分，再按评分排序认领
+                l3_scored = []
+                for l3_skel in l3_cands:
+                    if l3_skel in claimed_l3:
+                        continue
                     st3 = compute_stats(l3_skel, st2['matched_decks'])
                     if not st3 or st3['count'] < MIN_SUPPORT:
                         continue
-                    max_l3 = max((compute_stats(s, st2['matched_decks']) or {'appear_rate': 0})['appear_rate']
-                                 for s in l3_cands[:TOP_L3])
-                    st3['score'] = score(st3, max_l3)
+                    l3_scored.append((l3_skel, st3))
 
-                    # 具体配置（Jaccard 0.8合并变体）
-                    l3_decks = st3['matched_decks']
-                    merged = []
-                    visited = set()
-                    for ds_a in l3_decks:
-                        if ds_a in visited:
-                            continue
-                        m_cnt = deck_stats[ds_a]['count']
-                        m_win = deck_stats[ds_a]['wins']
-                        m_rep = ds_a
-                        visited.add(ds_a)
-                        for ds_b in l3_decks:
-                            if ds_b in visited:
-                                continue
-                            if jaccard(ds_a - l3_skel, ds_b - l3_skel) >= 0.80:
-                                m_cnt += deck_stats[ds_b]['count']
-                                m_win += deck_stats[ds_b]['wins']
-                                visited.add(ds_b)
-                                if deck_stats[ds_b]['count'] > deck_stats[ds_a]['count']:
-                                    m_rep = ds_b
-                        merged.append({
-                            'deck_set': m_rep, 'count': m_cnt, 'wins': m_win,
-                            'win_rate': m_win / m_cnt if m_cnt else 0.0,
-                            'appear_rate': m_cnt / total_runs,
-                        })
+                if l3_scored:
+                    max_l3 = max(st['appear_rate'] for _, st in l3_scored)
+                    for l3_skel, st3 in l3_scored:
+                        st3['score'] = score(st3, max_l3)
+                    l3_scored.sort(key=lambda x: -x[1]['score'])
 
-                    merged = [m for m in merged if m['count'] >= min_config_count]
-                    if not merged:
+                l3_list = []
+                for l3_skel, st3 in l3_scored[:TOP_L3]:
+                    claimed_l3.add(l3_skel)
+                    configs = build_configs(l3_skel, l2_skel, st3['matched_decks'])
+                    if not configs:
                         continue
-
-                    max_cfg = max(m['appear_rate'] for m in merged)
-                    for m in merged:
-                        m['score'] = score(m, max_cfg)
-                    merged.sort(key=lambda m: -m['score'])
-
-                    configs = []
-                    for m in merged[:TOP_CFG]:
-                        ds = m['deck_set']
-                        items = deck_stats[ds]['items']
-                        cards = [card_info(it['cardId'], it['cardId'] in l3_skel, it['cardId'] in (l3_skel - l2_skel))
-                                 for it in items if 'cardId' in it]
-                        configs.append({
-                            'cards': cards,
-                            'count': m['count'],
-                            'wins': m['wins'],
-                            'rate': m['win_rate'],
-                            'appearance_rate': m['appear_rate'],
-                            'score': m['score'],
-                            'screenshot': deck_stats[ds]['screenshot'],
-                        })
-
                     l3_list.append({
                         'core_cards': [card_info(cid, True, cid in (l3_skel - l2_skel)) for cid in sorted(l3_skel)],
                         'count': st3['count'], 'wins': st3['wins'],
@@ -861,6 +884,7 @@ class RunsQuery:
                 'rate': l1_data['win_rate'], 'appearance_rate': l1_data['appear_rate'],
                 'score': l1_data['score'], 'l2_variants': l2_list,
             })
+
 
         hero_map = {
             'Vanessa': '海盗/凡妮莎', 'Dooley': '工程师/杜利', 'Mak': '法师/马克',
