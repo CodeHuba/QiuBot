@@ -45,6 +45,7 @@ class RunsQuery:
         self.card_aliases = {}      # 别名 -> 官方中文名
         self.hero_aliases = {}      # 别名 -> 英雄名
         self.tex_map = {}           # 英文名 -> 图片文件名
+        self.size_map = {}          # cardId -> size (Small/Medium/Large)
         self.card_heroes = {}       # cardId -> [hero list]
 
     def load(self):
@@ -64,6 +65,25 @@ class RunsQuery:
             data = json.loads(trans_path.read_text(encoding='utf-8'))
             self.en_to_zh = data
             self.zh_to_en = {v: k for k, v in data.items()}
+
+        # 加载卡牌尺寸映射（从 GameData.db）
+        gamedata_path = Path(__file__).parent / 'cache' / 'GameData.db'
+        if gamedata_path.exists():
+            try:
+                import sqlite3 as _sl2, json as _j2
+                _gc = _sl2.connect(str(gamedata_path))
+                for (_d,) in _gc.execute('SELECT Data FROM cards').fetchall():
+                    try:
+                        _j = _j2.loads(_d)
+                        _cid = _j.get('Id')
+                        _sz = _j.get('Size', '')
+                        if _cid and _sz:
+                            self.size_map[_cid] = _sz
+                    except Exception:
+                        pass
+                _gc.close()
+            except Exception:
+                pass
 
         # 加载 tex_map
         tex_path = Path(__file__).parent / 'cache' / 'item_tex_map.json'
@@ -716,11 +736,13 @@ class RunsQuery:
             name_en = info.get('name', cid)
             name_zh = self.get_zh_name(name_en)
             art_url = _cih.get_art_url(card_id=cid, internal_name=name_en, size='art') or ''
+            card_size = self.size_map.get(cid, 'Small')
             return {
                 'cardId': cid,
                 'name_zh': name_zh if name_zh != name_en else name_en,
                 'name_en': name_en,
                 'img': art_url,
+                'size': card_size,
                 'is_core': is_core,
                 'is_new': is_new,
             }
