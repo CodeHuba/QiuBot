@@ -124,7 +124,8 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
                             ref_val = ref_val * mod_val
                         elif mod_mode == "Add":
                             ref_val = ref_val + mod_val
-                return ref_val, ref_attr
+                # attr_key 用 action 的 AttributeType 决定单位（如 FlatCooldownReduction 需转秒）
+                return ref_val, attr_type
         # 最后 fallback：从 tier_attrs 取 AttributeType
         if attr_type and attr_type in tier_attrs:
             return tier_attrs[attr_type], attr_type
