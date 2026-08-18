@@ -1550,6 +1550,11 @@ input[type="range"]::-moz-range-thumb{width:18px;height:18px;background:var(--ne
 /* === comp 空/加载 === */
 .comp-empty{text-align:center;padding:48px 20px;color:var(--text-secondary);font-size:14px;}
 .comp-empty::before{content:'🔍';display:block;font-size:36px;margin-bottom:12px;opacity:.5;}
+.comp-progress-wrap{padding:32px 20px;text-align:center;}
+.comp-progress-bar-bg{width:100%;max-width:320px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin:12px auto 8px;overflow:hidden;}
+.comp-progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--neon-violet),var(--neon-cyan));border-radius:3px;transition:width 0.3s ease;animation:comp-progress-pulse 1.5s ease-in-out infinite;}
+@keyframes comp-progress-pulse{0%,100%{opacity:1;}50%{opacity:0.6;}}
+.comp-progress-label{font-size:12px;color:var(--text-secondary);}
 
 /* === 移动端 === */
 @media(max-width:768px){
@@ -1759,15 +1764,46 @@ function renderTopcard(data){
 async function loadComp(){
   const key=currentHero;
   if(_compCache[key]){renderComp(_compCache[key]);return;}
-  document.getElementById('comp-result').innerHTML='<div class="loading">加载中...</div>';
+
+  // 进度条
+  const el=document.getElementById('comp-result');
+  el.innerHTML=`<div class="comp-progress-wrap">
+    <div class="comp-progress-label">正在挖掘阵容数据，请稍候...</div>
+    <div class="comp-progress-bar-bg"><div class="comp-progress-bar" id="comp-pbar"></div></div>
+    <div class="comp-progress-label" id="comp-pct">0%</div>
+  </div>`;
+
+  // 模拟进度（实际是单次请求，用定时器推进）
+  let pct=0;
+  const timer=setInterval(()=>{
+    // 前80%匀速推进，留20%给实际返回
+    if(pct<80){
+      pct += pct<30 ? 3 : pct<60 ? 1.5 : 0.5;
+      const bar=document.getElementById('comp-pbar');
+      const lbl=document.getElementById('comp-pct');
+      if(bar) bar.style.width=pct.toFixed(0)+'%';
+      if(lbl) lbl.textContent=pct.toFixed(0)+'%';
+    }
+  },200);
+
   const p=new URLSearchParams({hero:currentHero});
   try{
     const r=await fetch('/api/comp?'+p);
     const d=await r.json();
-    if(d.error){document.getElementById('comp-result').innerHTML='<div class="error-msg">'+d.error+'</div>';return;}
+    clearInterval(timer);
+    // 完成动画
+    const bar=document.getElementById('comp-pbar');
+    const lbl=document.getElementById('comp-pct');
+    if(bar) bar.style.width='100%';
+    if(lbl) lbl.textContent='100%';
+    await new Promise(res=>setTimeout(res,300));
+    if(d.error){el.innerHTML='<div class="error-msg">'+d.error+'</div>';return;}
     _compCache[key]=d;
     renderComp(d);
-  }catch(e){document.getElementById('comp-result').innerHTML='<div class="error-msg">请求失败: '+e.message+'</div>';}
+  }catch(e){
+    clearInterval(timer);
+    el.innerHTML='<div class="error-msg">请求失败: '+e.message+'</div>';
+  }
 }
 
 function renderComp(data){
