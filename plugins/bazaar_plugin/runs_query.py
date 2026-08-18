@@ -709,7 +709,7 @@ class RunsQuery:
             norm = st['appear_rate'] / max_appear if max_appear else 0.0
             return st['win_rate'] * WIN_WEIGHT + norm * APPEAR_WEIGHT
 
-        def card_info(cid, is_core=False):
+        def card_info(cid, is_core=False, is_new=False):
             info = self.card_mapping.get(cid, {})
             name_en = info.get('name', cid)
             name_zh = self.get_zh_name(name_en)
@@ -719,6 +719,7 @@ class RunsQuery:
                 'name_en': name_en,
                 'img': self.tex_map.get(name_en, ''),
                 'is_core': is_core,
+                'is_new': is_new,
             }
 
         # L1 去重（严格零重叠）
@@ -828,7 +829,7 @@ class RunsQuery:
                     for m in merged[:TOP_CFG]:
                         ds = m['deck_set']
                         items = deck_stats[ds]['items']
-                        cards = [card_info(it['cardId'], it['cardId'] in l3_skel)
+                        cards = [card_info(it['cardId'], it['cardId'] in l3_skel, it['cardId'] in (l3_skel - l2_skel))
                                  for it in items if 'cardId' in it]
                         configs.append({
                             'cards': cards,
@@ -841,21 +842,21 @@ class RunsQuery:
                         })
 
                     l3_list.append({
-                        'core_cards': [card_info(cid, True) for cid in sorted(l3_skel)],
+                        'core_cards': [card_info(cid, True, cid in (l3_skel - l2_skel)) for cid in sorted(l3_skel)],
                         'count': st3['count'], 'wins': st3['wins'],
                         'rate': st3['win_rate'], 'appearance_rate': st3['appear_rate'],
                         'score': st3['score'], 'configs': configs,
                     })
 
                 l2_list.append({
-                    'core_cards': [card_info(cid, True) for cid in sorted(l2_skel)],
+                    'core_cards': [card_info(cid, True, cid in (l2_skel - l1_skel)) for cid in sorted(l2_skel)],
                     'count': st2['count'], 'wins': st2['wins'],
                     'rate': st2['win_rate'], 'appearance_rate': st2['appear_rate'],
                     'score': st2['score'], 'l3_variants': l3_list,
                 })
 
             layers.append({
-                'core_cards': [card_info(cid, True) for cid in sorted(l1_skel)],
+                'core_cards': [card_info(cid, True, False) for cid in sorted(l1_skel)],
                 'count': l1_data['count'], 'wins': l1_data['wins'],
                 'rate': l1_data['win_rate'], 'appearance_rate': l1_data['appear_rate'],
                 'score': l1_data['score'], 'l2_variants': l2_list,
