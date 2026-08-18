@@ -1770,71 +1770,119 @@ async function loadComp(){
 }
 
 function renderComp(data){
-  const groups=data.groups||[];
-  if(!groups.length){
+  const layers=data.layers||[];
+  if(!layers.length){
     document.getElementById('comp-result').innerHTML='<div class="comp-empty">暂无满足条件的阵容数据<br><small>核心卡组合需出现≥50次</small></div>';
     return;
   }
-  const medals=['🥇','🥈','🥉','4','5','6','7','8','9','10'];
-  const html=groups.map((g,i)=>{
-    const pct=(g.rate*100).toFixed(1);
-    const color=rateColor(g.rate);
-    // 代表卡牌 chips
-    const chips=g.core_cards.slice(0,6).map(c=>{
-      return `<span class="comp-card-chip">${c.name_zh}</span>`;
-    }).join('');
-    // 变体
-    const varHtml=g.configs.map((v,vi)=>{
-      const vPct=(v.rate*100).toFixed(1);
-      const vColor=rateColor(v.rate);
+  const medals=['🥇','🥈','🥉'];
+
+  function chips(cards){
+    return cards.map(c=>`<span class="comp-card-chip">${c.name_zh}</span>`).join('');
+  }
+
+  function screenshotBtn(id, url){
+    if(!url) return '';
+    return `<div style="margin-top:8px">
+      <button onclick="toggleScreenshot('${id}')" style="background:none;border:1px solid rgba(38,217,242,0.3);border-radius:4px;color:var(--text-secondary);font-size:11px;padding:3px 10px;cursor:pointer;font-family:inherit;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--neon-cyan)';this.style.color='var(--neon-cyan)'" onmouseout="this.style.borderColor='rgba(38,217,242,0.3)';this.style.color='var(--text-secondary)'">
+        📷 查看截图 <span id="${id}-icon">▼</span>
+      </button>
+      <div id="${id}" style="display:none;margin-top:8px">
+        <img src="https://usercontent.bzdb.network${url}" style="max-width:100%;border-radius:6px;border:1px solid rgba(138,77,255,0.3)" loading="lazy" onerror="this.parentElement.style.display='none'">
+      </div>
+    </div>`;
+  }
+
+  function renderConfigs(configs, prefix){
+    if(!configs||!configs.length) return '<div style="font-size:12px;color:var(--text-secondary);padding:8px 0">暂无具体配置数据</div>';
+    return configs.map((v,vi)=>{
+      const id=`${prefix}-cfg-${vi}`;
       const cardHtml=v.cards.map(c=>{
-        const coreClass=c.is_core?' is-core':'';
-        return `<div class="variant-card${coreClass}">
-          <div class="variant-card-name">${c.name_zh}</div>
-        </div>`;
+        return `<div class="variant-card${c.is_core?' is-core':''}"><div class="variant-card-name">${c.name_zh}</div></div>`;
       }).join('');
-      const ssId = `ss-${i}-${vi}`;
-      const screenshotHtml = v.screenshot ? `
-        <div style="margin-top:8px">
-          <button onclick="toggleScreenshot('${ssId}')" style="background:none;border:1px solid rgba(38,217,242,0.3);border-radius:4px;color:var(--text-secondary);font-size:11px;padding:3px 10px;cursor:pointer;font-family:inherit;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--neon-cyan)';this.style.color='var(--neon-cyan)'" onmouseout="this.style.borderColor='rgba(38,217,242,0.3)';this.style.color='var(--text-secondary)'">
-            📷 查看截图 <span id="${ssId}-icon">▼</span>
-          </button>
-          <div id="${ssId}" style="display:none;margin-top:8px">
-            <img src="https://usercontent.bzdb.network${v.screenshot}" style="max-width:100%;border-radius:6px;border:1px solid rgba(138,77,255,0.3)" loading="lazy" onerror="this.parentElement.style.display='none'">
-          </div>
-        </div>` : '';
       return `<div class="comp-variant-item">
         <div class="variant-header">
           <span class="variant-label">配置 ${vi+1}</span>
           <div class="variant-stats">
-            <span class="variant-rate" style="color:${vColor}">评分 ${(v.score*100).toFixed(1)}</span>
-            <span class="variant-count">${vPct}% 胜率 · ${v.count}次</span>
+            <span class="variant-rate" style="color:${rateColor(v.rate)}">${(v.rate*100).toFixed(1)}% 胜率</span>
+            <span class="variant-count">${v.count}次出场</span>
           </div>
         </div>
         <div class="variant-cards">${cardHtml}</div>
-        ${screenshotHtml}
+        ${screenshotBtn(id, v.screenshot)}
       </div>`;
     }).join('');
-    return `<div class="comp-group" id="comp-g-${i}">
-      <div class="comp-group-header" onclick="toggleComp(${i})">
+  }
+
+  function renderL3(l3list, prefix){
+    if(!l3list||!l3list.length) return '';
+    return l3list.map((l3,k)=>{
+      const id=`${prefix}-l3-${k}`;
+      const cfgHtml=renderConfigs(l3.configs, id);
+      return `<div class="comp-group" id="${id}" style="margin:8px 0;border-color:rgba(38,217,242,0.25)">
+        <div class="comp-group-header" onclick="document.getElementById('${id}').classList.toggle('expanded')" style="background:rgba(9,10,42,0.5);padding:10px 16px">
+          <span style="font-size:12px;color:var(--text-secondary);flex-shrink:0">L3</span>
+          <div class="comp-rep-cards" style="flex:1">${chips(l3.core_cards)}</div>
+          <div class="comp-stats">
+            <div>
+              <div class="comp-rate" style="color:${rateColor(l3.rate)};font-size:14px">${(l3.rate*100).toFixed(1)}%</div>
+              <div class="comp-count">${l3.count}次</div>
+            </div>
+            <span class="comp-expand-icon">▼</span>
+          </div>
+        </div>
+        <div class="comp-variants" style="padding:12px 16px;background:rgba(0,0,0,0.2)">${cfgHtml}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderL2(l2list, prefix){
+    if(!l2list||!l2list.length) return '<div style="font-size:12px;color:var(--text-secondary);padding:8px">暂无变种数据</div>';
+    return l2list.map((l2,j)=>{
+      const id=`${prefix}-l2-${j}`;
+      const l3Html=renderL3(l2.l3_variants, id);
+      return `<div class="comp-group" id="${id}" style="margin:8px 0;border-color:rgba(244,56,184,0.25)">
+        <div class="comp-group-header" onclick="document.getElementById('${id}').classList.toggle('expanded')" style="background:rgba(9,10,42,0.45);padding:10px 16px">
+          <span style="font-size:12px;color:var(--text-secondary);flex-shrink:0">L2</span>
+          <div class="comp-rep-cards" style="flex:1">${chips(l2.core_cards)}</div>
+          <div class="comp-stats">
+            <div>
+              <div class="comp-rate" style="color:${rateColor(l2.rate)};font-size:14px">${(l2.rate*100).toFixed(1)}%</div>
+              <div class="comp-count">${l2.count}次</div>
+            </div>
+            <span class="comp-expand-icon">▼</span>
+          </div>
+        </div>
+        <div class="comp-variants" style="padding:12px 16px">${l3Html||'<div style="font-size:12px;color:var(--text-secondary)">暂无L3具体形态</div>'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  const html=layers.map((l1,i)=>{
+    const id=`comp-l1-${i}`;
+    const l2Html=renderL2(l1.l2_variants, id);
+    return `<div class="comp-group" id="${id}">
+      <div class="comp-group-header" onclick="document.getElementById('${id}').classList.toggle('expanded')">
         <span class="comp-rank">${medals[i]||i+1}</span>
         <div style="flex:1;min-width:0">
-          <div class="comp-rep-cards">${chips}</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">L1 体系</div>
+          <div class="comp-rep-cards">${chips(l1.core_cards)}</div>
         </div>
         <div class="comp-stats">
           <div>
-            <div class="comp-rate" style="color:${color}">评分 ${(g.score*100).toFixed(1)}</div>
-            <div class="comp-count">${pct}% 胜率 · ${g.count}次</div>
+            <div class="comp-rate" style="color:${rateColor(l1.rate)}">${(l1.rate*100).toFixed(1)}%</div>
+            <div class="comp-count">评分${(l1.score*100).toFixed(0)} · ${l1.count}次</div>
           </div>
           <span class="comp-expand-icon">▼</span>
         </div>
       </div>
-      <div class="comp-variants">${varHtml}</div>
+      <div class="comp-variants">${l2Html}</div>
     </div>`;
   }).join('');
+
   document.getElementById('comp-result').innerHTML=`
     <div style="margin-bottom:10px;font-size:12px;color:var(--text-secondary)">
-      共 ${data.total_runs} 局 · 至少 50 次出现 · 按胜率排序
+      共 ${data.total_runs} 局 · L1体系严格互斥 · 综合评分排序
     </div>
     ${html}`;
 }

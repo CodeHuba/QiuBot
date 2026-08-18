@@ -597,27 +597,24 @@ class RunsQuery:
              min_count: int = 50,
              min_config_count: int = 5,
              all_phases: bool = False) -> dict:
-        """阵容榜（FP-Growth + Jaccard 变体合并）"""
+        """四层嵌套阵容榜 L1(2张)→L2(3张)→L3(4张)→具体配置"""
         import json as _json
         import time
         from collections import defaultdict
 
-        MIN_SUPPORT             = min_count
-        MIN_ITEMSET_SIZE        = 3
-        MAX_ITEMSET_SIZE        = 5
-        MAX_CLASS_OVERLAP       = 0.50
-        VARIANT_MERGE_THRESHOLD = 0.80
-        WIN_WEIGHT              = 0.70
-        APPEAR_WEIGHT           = 0.30
-        TOP_GROUPS              = 3
-        TOP_CONFIGS             = 3
+        MIN_SUPPORT            = min_count
+        GENERIC_THRESHOLD      = 0.30
+        L2_OVERLAP             = 0.50
+        WIN_WEIGHT             = 0.70
+        APPEAR_WEIGHT          = 0.30
+        TOP_L1 = TOP_L2 = TOP_L3 = TOP_CFG = 3
 
         global _comp_cache, _comp_cache_ttl
-        cache_key = (hero, 'apriori')
+        cache_key = (hero, 'v2')
         if cache_key in _comp_cache:
-            cached_result, expire_time = _comp_cache[cache_key]
-            if time.time() < expire_time:
-                return cached_result
+            cached, exp = _comp_cache[cache_key]
+            if time.time() < exp:
+                return cached
 
         if not self.conn:
             self.load()
@@ -629,230 +626,251 @@ class RunsQuery:
             params.append(CURRENT_PHASE)
         rows = self.conn.execute(sql, params).fetchall()
 
-        runs_data = []
-        full_decks_sample = {}
-        full_decks_screenshot = {}
+        # 第一步：完全相同卡组去重，累加出场/胜场
+        deck_stats = defaultdict(lambda: {'count': 0, 'wins': 0, 'items': None, 'screenshot': ''})
         for items_json, stat_wins, screenshot_url in rows:
             try:
                 items = _json.loads(items_json) if items_json else []
                 if not items:
                     continue
-                card_ids = tuple(item['cardId'] for item in items if 'cardId' in item)
-                if len(card_ids) < MIN_ITEMSET_SIZE:
+                card_ids = tuple(sorted(item['cardId'] for item in items if 'cardId' in item))
+                if len(card_ids) < 2:
                     continue
                 deck_set = frozenset(card_ids)
                 is_win = int(stat_wins or 0) >= 10
-                runs_data.append((deck_set, is_win, items, screenshot_url or ''))
-                if deck_set not in full_decks_sample:
-                    full_decks_sample[deck_set] = items
+                s = deck_stats[deck_set]
+                s['count'] += 1
+                if is_win:
+                    s['wins'] += 1
+                if s['items'] is None:
+                    s['items'] = items
                 scr = screenshot_url or ''
                 if scr:
-                    if is_win and deck_set not in full_decks_screenshot:
-                        full_decks_screenshot[deck_set] = scr
-                    elif not is_win and deck_set not in full_decks_screenshot:
-                        full_decks_screenshot[deck_set] = scr
+                    if is_win or not s['screenshot']:
+                        s['screenshot'] = scr
             except Exception:
                 continue
 
-        total_runs = len(runs_data)
+        total_runs = sum(s['count'] for s in deck_stats.values())
         if total_runs == 0:
-            return {'hero': hero, 'groups': [], 'total_runs': 0}
+            return {'hero': hero, 'layers': [], 'total_runs': 0}
 
+        all_decks = list(deck_stats.keys())
+
+        # 第二步：FP-Growth 挖掘频繁2-项集
         try:
             from mlxtend.preprocessing import TransactionEncoder
             from mlxtend.frequent_patterns import fpgrowth
             import pandas as pd
-            transactions = [list(ds) for ds, _, _, _ in runs_data]
+            transactions = [list(ds) for ds in all_decks]
             te = TransactionEncoder()
-            te_array = te.fit(transactions).transform(transactions)
-            df = pd.DataFrame(te_array, columns=te.columns_)
-            min_support_ratio = MIN_SUPPORT / total_runs
-            freq_df = fpgrowth(df, min_support=min_support_ratio, use_colnames=True)
+            te_arr = te.fit(transactions).transform(transactions)
+            df = pd.DataFrame(te_arr, columns=te.columns_)
+            freq_df = fpgrowth(df, min_support=MIN_SUPPORT / total_runs, use_colnames=True)
             freq_df['length'] = freq_df['itemsets'].apply(len)
-            freq_df = freq_df[
-                (freq_df['length'] >= MIN_ITEMSET_SIZE) &
-                (freq_df['length'] <= MAX_ITEMSET_SIZE)
-            ]
-            candidate_skeletons = [frozenset(row['itemsets']) for _, row in freq_df.iterrows()]
+            cands_l1 = [frozenset(r['itemsets']) for _, r in freq_df[freq_df['length'] == 2].iterrows()]
         except Exception as e:
-            return {'hero': hero, 'groups': [], 'total_runs': total_runs, 'error': str(e)}
+            return {'hero': hero, 'layers': [], 'total_runs': total_runs, 'error': str(e)}
 
-        if not candidate_skeletons:
-            return {'hero': hero, 'groups': [], 'total_runs': total_runs}
+        if not cands_l1:
+            return {'hero': hero, 'layers': [], 'total_runs': total_runs}
 
-        def jaccard(a: frozenset, b: frozenset) -> float:
-            inter = len(a & b)
-            union = len(a | b)
-            return inter / union if union else 0.0
+        # 排除通用卡
+        card_freq = defaultdict(int)
+        for fs in cands_l1:
+            for c in fs:
+                card_freq[c] += 1
+        generic = {c for c, cnt in card_freq.items() if cnt / len(cands_l1) > GENERIC_THRESHOLD}
+        cands_l1 = [fs for fs in cands_l1 if not (fs & generic)]
+        if not cands_l1:
+            return {'hero': hero, 'layers': [], 'total_runs': total_runs}
 
-        candidate_skeletons.sort(key=lambda s: -len(s))
-        independent = []
-        for skel in candidate_skeletons:
-            if not any(skel < bigger for bigger in independent):
-                independent.append(skel)
+        def jaccard(a, b):
+            return len(a & b) / len(a | b) if (a | b) else 0.0
 
-        final_skeletons = []
-        for skel in independent:
-            if not any(jaccard(skel, ex) >= MAX_CLASS_OVERLAP for ex in final_skeletons):
-                final_skeletons.append(skel)
+        def deck_count(skel):
+            return sum(deck_stats[ds]['count'] for ds in all_decks if skel <= ds)
 
-        if not final_skeletons:
-            return {'hero': hero, 'groups': [], 'total_runs': total_runs}
-
-        group_runs = {skel: [] for skel in final_skeletons}
-        for deck_set, is_win, items, scr in runs_data:
-            matches = [(skel, len(skel)) for skel in final_skeletons if skel <= deck_set]
-            if not matches:
-                continue
-            best_skel = max(matches, key=lambda x: x[1])[0]
-            group_runs[best_skel].append((deck_set, is_win, items, scr))
-
-        group_stats = []
-        for skel in final_skeletons:
-            members = group_runs[skel]
-            if len(members) < MIN_SUPPORT:
-                continue
-            count = len(members)
-            wins = sum(1 for _, w, _, _ in members if w)
-            group_stats.append({
-                'skel':        skel,
-                'count':       count,
-                'wins':        wins,
-                'win_rate':    wins / count if count else 0.0,
+        def compute_stats(skeleton, pool):
+            matched = [ds for ds in pool if skeleton <= ds]
+            if not matched:
+                return None
+            count = sum(deck_stats[ds]['count'] for ds in matched)
+            wins  = sum(deck_stats[ds]['wins']  for ds in matched)
+            return {
+                'skeleton': skeleton,
+                'count': count, 'wins': wins,
+                'win_rate': wins / count if count else 0.0,
                 'appear_rate': count / total_runs,
-                'members':     members,
-            })
+                'matched_decks': matched,
+            }
 
-        if not group_stats:
-            return {'hero': hero, 'groups': [], 'total_runs': total_runs}
+        def score(st, max_appear):
+            norm = st['appear_rate'] / max_appear if max_appear else 0.0
+            return st['win_rate'] * WIN_WEIGHT + norm * APPEAR_WEIGHT
 
-        max_appear = max(g['appear_rate'] for g in group_stats)
-        for g in group_stats:
-            norm = g['appear_rate'] / max_appear if max_appear else 0.0
-            g['score'] = g['win_rate'] * WIN_WEIGHT + norm * APPEAR_WEIGHT
+        def card_info(cid, is_core=False):
+            info = self.card_mapping.get(cid, {})
+            name_en = info.get('name', cid)
+            name_zh = self.get_zh_name(name_en)
+            return {
+                'cardId': cid,
+                'name_zh': name_zh if name_zh != name_en else name_en,
+                'name_en': name_en,
+                'img': self.tex_map.get(name_en, ''),
+                'is_core': is_core,
+            }
 
-        group_stats.sort(key=lambda g: -g['score'])
-        top_groups_list = group_stats[:TOP_GROUPS]
+        # L1 去重（严格零重叠）
+        cands_l1.sort(key=lambda x: -deck_count(x))
+        l1_final = []
+        for c in cands_l1:
+            if not any(len(c & ex) > 0 for ex in l1_final):
+                l1_final.append(c)
 
-        result_groups = []
-        for g in top_groups_list:
-            skel = g['skel']
-            members = g['members']
+        # 计算L1 stats
+        l1_stats = []
+        for skel in l1_final:
+            st = compute_stats(skel, all_decks)
+            if st and st['count'] >= MIN_SUPPORT:
+                l1_stats.append(st)
 
-            deck_stats = defaultdict(lambda: {'count': 0, 'wins': 0})
-            for deck_set, is_win, items, scr in members:
-                deck_stats[deck_set]['count'] += 1
-                if is_win:
-                    deck_stats[deck_set]['wins'] += 1
+        if not l1_stats:
+            return {'hero': hero, 'layers': [], 'total_runs': total_runs}
 
-            merged = []
-            visited = set()
-            deck_list = list(deck_stats.items())
-            for i, (ds_a, stat_a) in enumerate(deck_list):
-                if ds_a in visited:
+        max_l1 = max(s['appear_rate'] for s in l1_stats)
+        for s in l1_stats:
+            s['score'] = score(s, max_l1)
+        l1_stats.sort(key=lambda s: -s['score'])
+        l1_stats = l1_stats[:TOP_L1]
+
+        # 对每个L1挖掘L2/L3
+        def mine_next(parent_skel, parent_pool, target_size):
+            sub_trans = [list(ds) for ds in parent_pool]
+            if len(sub_trans) < MIN_SUPPORT:
+                return []
+            te2 = TransactionEncoder()
+            te2_arr = te2.fit(sub_trans).transform(sub_trans)
+            df2 = pd.DataFrame(te2_arr, columns=te2.columns_)
+            freq2 = fpgrowth(df2, min_support=MIN_SUPPORT / len(sub_trans), use_colnames=True)
+            freq2['length'] = freq2['itemsets'].apply(len)
+            cands = [frozenset(r['itemsets']) for _, r in freq2[freq2['length'] == target_size].iterrows()
+                     if parent_skel <= frozenset(r['itemsets'])]
+            cands.sort(key=lambda x: -sum(deck_stats[ds]['count'] for ds in parent_pool if x <= ds))
+            result = []
+            for c in cands:
+                flex_c = c - parent_skel
+                if not any(jaccard(flex_c, ex - parent_skel) >= L2_OVERLAP for ex in result):
+                    result.append(c)
+            return result
+
+        layers = []
+        for l1_data in l1_stats:
+            l1_skel = l1_data['skeleton']
+            l1_matched = l1_data['matched_decks']
+
+            l2_cands = mine_next(l1_skel, l1_matched, 3)
+            l2_list = []
+            for l2_skel in l2_cands[:TOP_L2]:
+                st2 = compute_stats(l2_skel, l1_matched)
+                if not st2 or st2['count'] < MIN_SUPPORT:
                     continue
-                m_count = stat_a['count']
-                m_wins  = stat_a['wins']
-                m_repr  = ds_a
-                visited.add(ds_a)
-                for ds_b, stat_b in deck_list:
-                    if ds_b in visited:
+                max_l2 = max((compute_stats(s, l1_matched) or {'appear_rate': 0})['appear_rate']
+                             for s in l2_cands[:TOP_L2])
+                st2['score'] = score(st2, max_l2)
+
+                l3_cands = mine_next(l2_skel, st2['matched_decks'], 4)
+                l3_list = []
+                for l3_skel in l3_cands[:TOP_L3]:
+                    st3 = compute_stats(l3_skel, st2['matched_decks'])
+                    if not st3 or st3['count'] < MIN_SUPPORT:
                         continue
-                    if jaccard(ds_a, ds_b) >= VARIANT_MERGE_THRESHOLD:
-                        m_count += stat_b['count']
-                        m_wins  += stat_b['wins']
-                        visited.add(ds_b)
-                        if stat_b['count'] > stat_a['count']:
-                            m_repr = ds_b
-                merged.append({
-                    'deck_set':    m_repr,
-                    'count':       m_count,
-                    'wins':        m_wins,
-                    'win_rate':    m_wins / m_count if m_count else 0.0,
-                    'appear_rate': m_count / total_runs,
-                })
+                    max_l3 = max((compute_stats(s, st2['matched_decks']) or {'appear_rate': 0})['appear_rate']
+                                 for s in l3_cands[:TOP_L3])
+                    st3['score'] = score(st3, max_l3)
 
-            inner_max = max(m['appear_rate'] for m in merged) if merged else 1.0
-            for m in merged:
-                norm = m['appear_rate'] / inner_max if inner_max else 0.0
-                m['score'] = m['win_rate'] * WIN_WEIGHT + norm * APPEAR_WEIGHT
+                    # 具体配置（Jaccard 0.8合并变体）
+                    l3_decks = st3['matched_decks']
+                    merged = []
+                    visited = set()
+                    for ds_a in l3_decks:
+                        if ds_a in visited:
+                            continue
+                        m_cnt = deck_stats[ds_a]['count']
+                        m_win = deck_stats[ds_a]['wins']
+                        m_rep = ds_a
+                        visited.add(ds_a)
+                        for ds_b in l3_decks:
+                            if ds_b in visited:
+                                continue
+                            if jaccard(ds_a - l3_skel, ds_b - l3_skel) >= 0.80:
+                                m_cnt += deck_stats[ds_b]['count']
+                                m_win += deck_stats[ds_b]['wins']
+                                visited.add(ds_b)
+                                if deck_stats[ds_b]['count'] > deck_stats[ds_a]['count']:
+                                    m_rep = ds_b
+                        merged.append({
+                            'deck_set': m_rep, 'count': m_cnt, 'wins': m_win,
+                            'win_rate': m_win / m_cnt if m_cnt else 0.0,
+                            'appear_rate': m_cnt / total_runs,
+                        })
 
-            # 过滤低频配置（合并后仍需满足 min_config_count）
-            merged = [m for m in merged if m['count'] >= min_config_count]
-            merged.sort(key=lambda m: -m['score'])
-            top_configs_list = merged[:TOP_CONFIGS]
-
-            configs = []
-            for m in top_configs_list:
-                ds = m['deck_set']
-                sample_items = full_decks_sample.get(ds, [])
-                cards_info = []
-                for it in sample_items:
-                    cid = it.get('cardId', '')
-                    if not cid:
+                    merged = [m for m in merged if m['count'] >= min_config_count]
+                    if not merged:
                         continue
-                    info = self.card_mapping.get(cid, {})
-                    name_en = info.get('name', cid)
-                    name_zh = self.get_zh_name(name_en)
-                    img = self.tex_map.get(name_en, '')
-                    cards_info.append({
-                        'cardId':  cid,
-                        'name_zh': name_zh if name_zh != name_en else name_en,
-                        'name_en': name_en,
-                        'img':     img,
-                        'is_core': cid in skel,
+
+                    max_cfg = max(m['appear_rate'] for m in merged)
+                    for m in merged:
+                        m['score'] = score(m, max_cfg)
+                    merged.sort(key=lambda m: -m['score'])
+
+                    configs = []
+                    for m in merged[:TOP_CFG]:
+                        ds = m['deck_set']
+                        items = deck_stats[ds]['items']
+                        cards = [card_info(it['cardId'], it['cardId'] in l3_skel)
+                                 for it in items if 'cardId' in it]
+                        configs.append({
+                            'cards': cards,
+                            'count': m['count'],
+                            'wins': m['wins'],
+                            'rate': m['win_rate'],
+                            'appearance_rate': m['appear_rate'],
+                            'score': m['score'],
+                            'screenshot': deck_stats[ds]['screenshot'],
+                        })
+
+                    l3_list.append({
+                        'core_cards': [card_info(cid, True) for cid in sorted(l3_skel)],
+                        'count': st3['count'], 'wins': st3['wins'],
+                        'rate': st3['win_rate'], 'appearance_rate': st3['appear_rate'],
+                        'score': st3['score'], 'configs': configs,
                     })
-                configs.append({
-                    'cards':           cards_info,
-                    'count':           m['count'],
-                    'wins':            m['wins'],
-                    'rate':            m['win_rate'],
-                    'appearance_rate': m['appear_rate'],
-                    'score':           m['score'],
-                    'screenshot':      full_decks_screenshot.get(ds, ''),
+
+                l2_list.append({
+                    'core_cards': [card_info(cid, True) for cid in sorted(l2_skel)],
+                    'count': st2['count'], 'wins': st2['wins'],
+                    'rate': st2['win_rate'], 'appearance_rate': st2['appear_rate'],
+                    'score': st2['score'], 'l3_variants': l3_list,
                 })
 
-            core_cards = []
-            for cid in sorted(skel):
-                info = self.card_mapping.get(cid, {})
-                name_en = info.get('name', cid)
-                name_zh = self.get_zh_name(name_en)
-                img = self.tex_map.get(name_en, '')
-                core_cards.append({
-                    'cardId':  cid,
-                    'name_zh': name_zh if name_zh != name_en else name_en,
-                    'name_en': name_en,
-                    'img':     img,
-                })
-
-            result_groups.append({
-                'core_cards':      core_cards,
-                'count':           g['count'],
-                'wins':            g['wins'],
-                'rate':            g['win_rate'],
-                'appearance_rate': g['appear_rate'],
-                'score':           g['score'],
-                'configs':         configs,
+            layers.append({
+                'core_cards': [card_info(cid, True) for cid in sorted(l1_skel)],
+                'count': l1_data['count'], 'wins': l1_data['wins'],
+                'rate': l1_data['win_rate'], 'appearance_rate': l1_data['appear_rate'],
+                'score': l1_data['score'], 'l2_variants': l2_list,
             })
 
         hero_map = {
-            'Vanessa':     '海盗/凡妮莎',
-            'Dooley':      '工程师/杜利',
-            'Mak':         '法师/马克',
-            'Pygmalien':   '猪/皮格',
-            'Stelle':      '机甲/斯黛拉',
-            'Jules':       '吸血鬼/朱尔斯',
-            'Karnok':      '兽人/卡诺克',
-            'The Dragons': '双龙',
+            'Vanessa': '海盗/凡妮莎', 'Dooley': '工程师/杜利', 'Mak': '法师/马克',
+            'Pygmalien': '猪/皮格', 'Stelle': '机甲/斯黛拉', 'Jules': '吸血鬼/朱尔斯',
+            'Karnok': '兽人/卡诺克', 'The Dragons': '双龙',
         }
 
         result = {
-            'hero':       hero,
-            'hero_zh':    hero_map.get(hero, hero),
-            'groups':     result_groups,
-            'total_runs': total_runs,
+            'hero': hero, 'hero_zh': hero_map.get(hero, hero),
+            'layers': layers, 'total_runs': total_runs,
         }
-
         _comp_cache[cache_key] = (result, time.time() + _comp_cache_ttl)
         return result
 
