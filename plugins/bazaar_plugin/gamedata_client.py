@@ -208,6 +208,14 @@ def render_tooltip(
     def resolve_single(ph: str):
         parts = ph.strip().split(".")
         if len(parts) < 2:
+            # 单个占位符：直接从 tier_attrs 取属性值（如 {TempoCost}）
+            attr_name = parts[0]
+            if attr_name in tier_attrs:
+                val = fmt_val(tier_attrs[attr_name], attr_name)
+                # TempoCost 加「节奏」标签
+                if attr_name == 'TempoCost':
+                    return f'节奏 {val}'
+                return val
             return None
         prefix, ab_id = parts[0], parts[1]
         sub = parts[2] if len(parts) > 2 else ""
