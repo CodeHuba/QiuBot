@@ -607,7 +607,8 @@ class RunsQuery:
         L2_OVERLAP             = 0.50
         WIN_WEIGHT             = 0.70
         APPEAR_WEIGHT          = 0.30
-        TOP_L1 = TOP_L2 = TOP_L3 = TOP_CFG = 3
+        TOP_L1 = TOP_L2 = TOP_L3 = 5
+        TOP_CFG = 3
 
         global _comp_cache, _comp_cache_ttl
         cache_key = (hero, 'v2')
@@ -860,10 +861,8 @@ class RunsQuery:
 
                 l3_list = []
                 for l3_skel, st3 in l3_scored[:TOP_L3]:
-                    claimed_l3.add(l3_skel)
+                    claimed_l3.add(l3_skel)  # 立即认领，不管configs是否为空
                     configs = build_configs(l3_skel, l2_skel, st3['matched_decks'])
-                    if not configs:
-                        continue
                     l3_list.append({
                         'core_cards': [card_info(cid, True, cid in (l3_skel - l2_skel)) for cid in sorted(l3_skel)],
                         'count': st3['count'], 'wins': st3['wins'],
