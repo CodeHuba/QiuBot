@@ -710,15 +710,17 @@ class RunsQuery:
             norm = st['appear_rate'] / max_appear if max_appear else 0.0
             return st['win_rate'] * WIN_WEIGHT + norm * APPEAR_WEIGHT
 
+        from . import card_image_helper as _cih
         def card_info(cid, is_core=False, is_new=False):
             info = self.card_mapping.get(cid, {})
             name_en = info.get('name', cid)
             name_zh = self.get_zh_name(name_en)
+            art_url = _cih.get_art_url(card_id=cid, internal_name=name_en, size='art') or ''
             return {
                 'cardId': cid,
                 'name_zh': name_zh if name_zh != name_en else name_en,
                 'name_en': name_en,
-                'img': self.tex_map.get(name_en, ''),
+                'img': art_url,
                 'is_core': is_core,
                 'is_new': is_new,
             }
