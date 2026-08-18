@@ -1847,11 +1847,7 @@ function renderComp(data){
     if(!configs||!configs.length) return '<div style="font-size:12px;color:var(--text-secondary);padding:8px 0">暂无具体配置数据</div>';
     return configs.map((v,vi)=>{
       const id=`${prefix}-cfg-${vi}`;
-      const cardHtml=v.cards.map(c=>{
-        const szCls='size-'+(c.size||'Small');
-        const imgHtml=c.img?`<img class="${szCls}" src="${c.img}" alt="${c.name_zh}" loading="lazy" onerror="this.style.display='none'">`:'';
-        return `<div class="variant-card${c.is_core?' is-core':''}">${imgHtml}<div class="variant-card-name">${c.name_zh}</div></div>`;
-      }).join('');
+      const cardHtml=chips(v.cards);
       return `<div class="comp-variant-item">
         <div class="variant-header">
           <span class="variant-label">配置 ${vi+1}</span>
@@ -1860,7 +1856,7 @@ function renderComp(data){
             <span class="variant-count">${v.count}次出场</span>
           </div>
         </div>
-        <div class="variant-cards">${cardHtml}</div>
+        <div class="comp-rep-cards" style="margin-top:6px;flex-wrap:wrap">${cardHtml}</div>
         ${screenshotBtn(id, v.screenshot)}
       </div>`;
     }).join('');
