@@ -1888,6 +1888,8 @@ function renderComp(data){
     return l2list.map((l2,j)=>{
       const id=`${prefix}-l2-${j}`;
       const l3Html=renderL3(l2.l3_variants, id);
+      // L3 为空时用兜底配置
+      const l2InnerHtml = l3Html || renderConfigs(l2.configs, id);
       return `<div class="comp-group" id="${id}" style="margin:8px 0;border-color:rgba(244,56,184,0.25)">
         <div class="comp-group-header" onclick="document.getElementById('${id}').classList.toggle('expanded')" style="background:rgba(9,10,42,0.45);padding:10px 16px">
           <span style="font-size:12px;color:var(--text-secondary);flex-shrink:0">L2</span>
@@ -1900,7 +1902,7 @@ function renderComp(data){
             <span class="comp-expand-icon">▼</span>
           </div>
         </div>
-        <div class="comp-variants" style="padding:12px 16px">${l3Html||'<div style="font-size:12px;color:var(--text-secondary)">暂无L3具体形态</div>'}</div>
+        <div class="comp-variants" style="padding:12px 16px">${l2InnerHtml||'<div style="font-size:12px;color:var(--text-secondary)">暂无数据</div>'}</div>
       </div>`;
     }).join('');
   }

@@ -771,14 +771,18 @@ class RunsQuery:
         l1_stats = l1_stats[:TOP_L1]
 
         # 对每个L1挖掘L2/L3
+        FALLBACK_SUPPORTS = [MIN_SUPPORT, 20, 10]  # 降级阈值
+
         def mine_next(parent_skel, parent_pool, target_size):
             sub_trans = [list(ds) for ds in parent_pool]
-            if len(sub_trans) < MIN_SUPPORT:
+            if len(sub_trans) < 10:
                 return []
             te2 = TransactionEncoder()
             te2_arr = te2.fit(sub_trans).transform(sub_trans)
             df2 = pd.DataFrame(te2_arr, columns=te2.columns_)
-            freq2 = fpgrowth(df2, min_support=MIN_SUPPORT / len(sub_trans), use_colnames=True)
+            # 用最低降级阈值挖掘，后续按实际阈值过滤
+            min_sup = min(FALLBACK_SUPPORTS) / len(sub_trans)
+            freq2 = fpgrowth(df2, min_support=min_sup, use_colnames=True)
             freq2['length'] = freq2['itemsets'].apply(len)
             cands = [frozenset(r['itemsets']) for _, r in freq2[freq2['length'] == target_size].iterrows()
                      if parent_skel <= frozenset(r['itemsets'])]
@@ -789,6 +793,13 @@ class RunsQuery:
                 if not any(jaccard(flex_c, ex - parent_skel) >= L2_OVERLAP for ex in result):
                     result.append(c)
             return result
+
+        def get_effective_support(pool_size):
+            """根据数据量选择有效阈值（降级）"""
+            for threshold in FALLBACK_SUPPORTS:
+                if pool_size >= threshold:
+                    return threshold
+            return FALLBACK_SUPPORTS[-1]
 
         # 全局独占认领：L2/L3 骨架只能归属一个父节点
         claimed_l2 = set()  # 已被认领的 L2 骨架
@@ -818,8 +829,13 @@ class RunsQuery:
                     'win_rate': m_win / m_cnt if m_cnt else 0.0,
                     'appear_rate': m_cnt / total_runs,
                 })
-            merged = [m for m in merged if m['count'] >= min_config_count]
-            if not merged:
+            # 降级：5 -> 3 -> 1
+            for cfg_threshold in [min_config_count, 3, 1]:
+                filtered = [m for m in merged if m['count'] >= cfg_threshold]
+                if filtered:
+                    merged = filtered
+                    break
+            else:
                 return []
             max_cfg = max(m['appear_rate'] for m in merged)
             for m in merged:
@@ -847,11 +863,12 @@ class RunsQuery:
 
             # 先计算所有候选 L2 的 stats 和评分，再按评分排序认领
             l2_scored = []
+            eff_sup_l2 = get_effective_support(sum(deck_stats[ds]['count'] for ds in l1_matched))
             for l2_skel in l2_cands:
                 if l2_skel in claimed_l2:
                     continue
                 st2 = compute_stats(l2_skel, l1_matched)
-                if not st2 or st2['count'] < MIN_SUPPORT:
+                if not st2 or st2['count'] < eff_sup_l2:
                     continue
                 l2_scored.append((l2_skel, st2))
 
@@ -869,11 +886,12 @@ class RunsQuery:
 
                 # 先计算所有候选 L3 的 stats 和评分，再按评分排序认领
                 l3_scored = []
+                eff_sup_l3 = get_effective_support(st2['count'])
                 for l3_skel in l3_cands:
                     if l3_skel in claimed_l3:
                         continue
                     st3 = compute_stats(l3_skel, st2['matched_decks'])
-                    if not st3 or st3['count'] < MIN_SUPPORT:
+                    if not st3 or st3['count'] < eff_sup_l3:
                         continue
                     l3_scored.append((l3_skel, st3))
 
@@ -894,19 +912,28 @@ class RunsQuery:
                         'score': st3['score'], 'configs': configs,
                     })
 
+                # L3 为空时，直接在 L2 层挂具体配置作为兜底
+                if not l3_list:
+                    fallback_configs = build_configs(l2_skel, l1_skel, st2['matched_decks'])
+                else:
+                    fallback_configs = []
+
                 l2_list.append({
                     'core_cards': [card_info(cid, True, cid in (l2_skel - l1_skel)) for cid in sorted(l2_skel)],
                     'count': st2['count'], 'wins': st2['wins'],
                     'rate': st2['win_rate'], 'appearance_rate': st2['appear_rate'],
                     'score': st2['score'], 'l3_variants': l3_list,
+                    'configs': fallback_configs,  # L3空时的兜底配置
                 })
 
-            layers.append({
-                'core_cards': [card_info(cid, True, False) for cid in sorted(l1_skel)],
-                'count': l1_data['count'], 'wins': l1_data['wins'],
-                'rate': l1_data['win_rate'], 'appearance_rate': l1_data['appear_rate'],
-                'score': l1_data['score'], 'l2_variants': l2_list,
-            })
+            # L2 全空的 L1 不展示
+            if l2_list:
+                layers.append({
+                    'core_cards': [card_info(cid, True, False) for cid in sorted(l1_skel)],
+                    'count': l1_data['count'], 'wins': l1_data['wins'],
+                    'rate': l1_data['win_rate'], 'appearance_rate': l1_data['appear_rate'],
+                    'score': l1_data['score'], 'l2_variants': l2_list,
+                })
 
 
         hero_map = {
