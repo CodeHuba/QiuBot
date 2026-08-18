@@ -1510,10 +1510,7 @@ input[type="range"]::-moz-range-thumb{width:18px;height:18px;background:var(--ne
 .comp-card-chip{padding:3px 9px;border-radius:4px;font-size:12px;font-weight:600;background:rgba(138,77,255,.12);color:var(--text-primary);border:1px solid rgba(138,77,255,.3);white-space:nowrap;}
 .comp-card-chip.has-img{padding:3px 6px;display:flex;align-items:center;gap:4px;}
 .comp-card-chip.is-new{background:rgba(244,56,184,0.25);border-color:rgba(244,56,184,0.8);color:#F438B8;font-weight:700;box-shadow:0 0 6px rgba(244,56,184,0.4);}
-.comp-card-img{height:28px;object-fit:contain;border-radius:3px;flex-shrink:0;}
-.comp-card-img.size-Small{width:28px;}
-.comp-card-img.size-Medium{width:44px;}
-.comp-card-img.size-Large{width:60px;}
+.comp-card-img{height:32px;width:auto;object-fit:contain;border-radius:3px;flex-shrink:0;}
 .comp-stats{display:flex;align-items:center;gap:14px;flex-shrink:0;}
 .comp-rate{font-size:18px;font-weight:800;}
 .comp-count{font-size:12px;color:var(--text-secondary);text-align:right;}
@@ -1821,8 +1818,7 @@ function renderComp(data){
     return cards.map(c=>{
       const cls = c.is_new ? 'comp-card-chip is-new' : 'comp-card-chip';
       if(c.img){
-        const sizeCls = 'size-'+(c.size||'Small');
-        return `<span class="${cls} has-img"><img class="comp-card-img ${sizeCls}" src="${c.img}" alt="${c.name_zh}" loading="lazy" onerror="this.style.display='none'">${c.name_zh}</span>`;
+        return `<span class="${cls} has-img"><img class="comp-card-img" src="${c.img}" alt="${c.name_zh}" loading="lazy" onerror="this.style.display='none'">${c.name_zh}</span>`;
       }
       return `<span class="${cls}">${c.name_zh}</span>`;
     }).join('');
