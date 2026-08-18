@@ -1660,7 +1660,7 @@ function trackPV(tab){
 // 全局变量
 let currentHero = 'Vanessa';
 let currentContent = 'topcard';
-let compN = 2;
+// compN已移除
 const _topcardCache = {};
 const _compCache = {};
 const TIER_COLOR = {Diamond:'#26D9F2',Gold:'#F5C76A',Silver:'#B5B3D7',Bronze:'#cd7f32',Legendary:'#F438B8'};
@@ -1677,7 +1677,7 @@ function switchHero(hero, el){
   document.querySelectorAll('.hero-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   delete _topcardCache[hero];
-  delete _compCache[hero+'_'+compN];
+  delete _compCache[hero];
   if(currentContent==='topcard')loadTopcard();
   else loadComp();
 }
@@ -1756,10 +1756,10 @@ function renderTopcard(data){
 
 // ── 阵容榜 ──
 async function loadComp(){
-  const key=currentHero+'_'+compN;
+  const key=currentHero;
   if(_compCache[key]){renderComp(_compCache[key]);return;}
   document.getElementById('comp-result').innerHTML='<div class="loading">加载中...</div>';
-  const p=new URLSearchParams({hero:currentHero,n:compN,top:10});
+  const p=new URLSearchParams({hero:currentHero});
   try{
     const r=await fetch('/api/comp?'+p);
     const d=await r.json();
@@ -1772,7 +1772,7 @@ async function loadComp(){
 function renderComp(data){
   const groups=data.groups||[];
   if(!groups.length){
-    document.getElementById('comp-result').innerHTML='<div class="comp-empty">暂无满足条件的阵容数据<br><small>当前 n=' + compN + '，需出现至少 50 次</small></div>';
+    document.getElementById('comp-result').innerHTML='<div class="comp-empty">暂无满足条件的阵容数据<br><small>核心卡组合需出现≥50次</small></div>';
     return;
   }
   const medals=['🥇','🥈','🥉','4','5','6','7','8','9','10'];
