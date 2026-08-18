@@ -16,7 +16,7 @@ import sqlite3
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode, quote
 
 import requests
@@ -221,7 +221,7 @@ def collect_via_fetch_in_browser(driver, conn, t_token):
         params = {
             'sort': 'newest',
             'order': 'desc',
-            'createdAfter': SEASON_START,
+            'createdAfter': (datetime.now(timezone.utc) - timedelta(hours=4)).strftime('%a, %d %b %Y %H:%M:%S GMT'),
             't': t_token
         }
         if cursor_created_at and cursor_id:
@@ -273,10 +273,9 @@ def collect_via_fetch_in_browser(driver, conn, t_token):
         total_new += new
         print(f"  第 {page+1} 页: {len(data)} 条 runs（新增 {new}）")
 
-        # 如果整页都是已有数据，说明后面的也都有了，提前结束
+        # 遇到全重复页跳过，继续翻页（可能中间有漏采的）
         if new == 0:
-            print("  本页全部为已有数据，停止拉取")
-            break
+            print("  本页全部为已有数据，继续翻页...")
 
         # 更新游标
         last = data[-1]
