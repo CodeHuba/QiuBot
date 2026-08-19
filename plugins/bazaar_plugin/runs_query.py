@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from pathlib import Path
 from . import translations as _trans
-from .data_client import CURRENT_SEASON_ID, CURRENT_PHASE
+from .data_client import CURRENT_SEASON_ID, CURRENT_PHASE, RUNS_SEASON_ID
 
 
 ALIAS_FILE = "/opt/qiubot/data/bz_aliases.json"
@@ -174,7 +174,7 @@ class RunsQuery:
 
         # 默认只展示当前补丁阶段的阵容，避免旧补丁数据混入。
         sql = "SELECT id, hero, username, created_at, items_json, skills_json, stat_wins, stat_losses, screenshot_url FROM runs WHERE season=? AND phase=?"
-        params = [CURRENT_SEASON_ID, CURRENT_PHASE]
+        params = [RUNS_SEASON_ID, CURRENT_PHASE]
 
         if hero:
             sql += " AND LOWER(hero) = LOWER(?)"
@@ -372,7 +372,7 @@ class RunsQuery:
 
         # 拉取所有 runs（按条件过滤英雄/时间/阶段）
         sql = "SELECT items_json, stat_wins FROM runs WHERE season=?"
-        params = [CURRENT_SEASON_ID]
+        params = [RUNS_SEASON_ID]
         if not all_phases:
             sql += " AND phase=?"
             params.append(CURRENT_PHASE)
@@ -440,7 +440,7 @@ class RunsQuery:
 
         # 拉取所有 runs（按条件过滤阶段/时间）
         sql = "SELECT items_json, stat_wins FROM runs WHERE season=?"
-        params = [CURRENT_SEASON_ID]
+        params = [RUNS_SEASON_ID]
         if not all_phases:
             sql += " AND phase=?"
             params.append(CURRENT_PHASE)
@@ -540,7 +540,7 @@ class RunsQuery:
 
         # 拉取该英雄所有 runs（按条件过滤阶段/时间）
         sql = "SELECT items_json, stat_wins FROM runs WHERE season=? AND LOWER(hero)=LOWER(?)"
-        params = [CURRENT_SEASON_ID, hero]
+        params = [RUNS_SEASON_ID, hero]
         if not all_phases:
             sql += " AND phase=?"
             params.append(CURRENT_PHASE)
@@ -641,7 +641,7 @@ class RunsQuery:
             self.load()
 
         sql = "SELECT items_json, stat_wins, screenshot_url FROM runs WHERE season=? AND LOWER(hero)=LOWER(?)"
-        params = [CURRENT_SEASON_ID, hero]
+        params = [RUNS_SEASON_ID, hero]
         if not all_phases:
             sql += " AND phase=?"
             params.append(CURRENT_PHASE)

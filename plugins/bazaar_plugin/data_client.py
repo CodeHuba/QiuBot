@@ -31,6 +31,7 @@ MRMAO_API_BASE = "https://bazaarapi.mrmao.life"
 # 当前赛季 ID（comprehensive-info 必传）
 CURRENT_SEASON_ID = 18
 CURRENT_PHASE = "17.2"  # 当前赛季阶段，补丁后手动更新
+RUNS_SEASON_ID = 17  # runs 数据库中的赛季字段（采集时写入的 season 值）
 
 # 4 个百科端点 → 本地缓存文件名
 WIKI_ENDPOINTS = {
