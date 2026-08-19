@@ -22,7 +22,7 @@ from ocr_worker import start_worker, enqueue_run
 start_worker()
 
 from plugins.bazaar_plugin.runs_query import RunsQuery
-from plugins.bazaar_plugin.data_client import CURRENT_SEASON_ID, CURRENT_PHASE
+from plugins.bazaar_plugin.data_client import RUNS_SEASON_ID, CURRENT_PHASE
 
 INGEST_TOKEN = '2320869dd20357f336a056abc6b095ea615651ceadabf698'
 
@@ -463,7 +463,7 @@ def api_ingest():
                      run.get('playerRank'), run.get('playerRankAfter'),
                      run.get('screenshotUrl'),
                      __import__('json').dumps(run, ensure_ascii=False),
-                     __import__('datetime').datetime.now().isoformat(), CURRENT_SEASON_ID, CURRENT_PHASE))
+                     __import__('datetime').datetime.now().isoformat(), RUNS_SEASON_ID, CURRENT_PHASE))
                 if conn.total_changes > 0:
                     new_count += 1
                     # 新 run 加入 OCR 队列识别游戏用户名
