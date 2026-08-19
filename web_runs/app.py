@@ -15,6 +15,12 @@ from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory, send_file, abort, Response
 
 sys.path.insert(0, '/opt/qiubot')
+import sys as _sys; _sys.path.insert(0, '/opt/qiubot/web_runs')
+from ocr_worker import start_worker, enqueue_run
+
+# 启动 OCR 后台线程
+start_worker()
+
 from plugins.bazaar_plugin.runs_query import RunsQuery
 from plugins.bazaar_plugin.data_client import CURRENT_SEASON_ID, CURRENT_PHASE
 
@@ -458,7 +464,10 @@ def api_ingest():
                      run.get('screenshotUrl'),
                      __import__('json').dumps(run, ensure_ascii=False),
                      __import__('datetime').datetime.now().isoformat(), CURRENT_SEASON_ID, CURRENT_PHASE))
-                new_count += conn.total_changes > 0 and 1 or 0
+                if conn.total_changes > 0:
+                    new_count += 1
+                    # 新 run 加入 OCR 队列识别游戏用户名
+                    enqueue_run(run['id'], run.get('screenshotUrl', ''))
             except Exception as e:
                 pass
         conn.commit()
