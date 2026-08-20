@@ -19,7 +19,7 @@ import sys as _sys; _sys.path.insert(0, '/opt/qiubot/web_runs')
 from ocr_worker import start_worker, enqueue_run
 
 # 启动 OCR 后台线程
-start_worker()
+# start_worker()  # 已改为凌晨批量处理
 
 from plugins.bazaar_plugin.runs_query import RunsQuery
 from plugins.bazaar_plugin.data_client import RUNS_SEASON_ID, CURRENT_PHASE
@@ -441,7 +441,7 @@ def api_ingest():
 
     db_path = '/opt/qiubot/data/bazaar_runs.db'
     try:
-        conn = __import__('sqlite3').connect(db_path, check_same_thread=False)
+        conn = __import__('sqlite3').connect(db_path, check_same_thread=False, timeout=30)
         new_count = 0
         for run in data:
             wins = run.get('statWins') or 0
@@ -467,7 +467,7 @@ def api_ingest():
                 if conn.total_changes > 0:
                     new_count += 1
                     # 新 run 加入 OCR 队列识别游戏用户名
-                    enqueue_run(run['id'], run.get('screenshotUrl', ''))
+                    # enqueue_run(run['id'], run.get('screenshotUrl', ''))  # 已改为凌晨批量处理
             except Exception as e:
                 pass
         conn.commit()
