@@ -77,7 +77,7 @@ def ocr_worker():
             # 写入数据库
             if username:
                 try:
-                    conn = sqlite3.connect(DB_PATH)
+                    conn = sqlite3.connect(DB_PATH, timeout=30)
                     conn.execute('UPDATE runs SET game_username=? WHERE id=?', (username, run_id))
                     conn.commit()
                     conn.close()

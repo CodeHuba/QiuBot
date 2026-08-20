@@ -40,7 +40,7 @@ def extract_username(screenshot_url):
         return None
 
 def run(season, phase, limit=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     c = conn.cursor()
     sql = """SELECT id, screenshot_url FROM runs
              WHERE season=? AND phase=?
