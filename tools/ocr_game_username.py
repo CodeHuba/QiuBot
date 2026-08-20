@@ -40,6 +40,8 @@ def extract_username(screenshot_url):
         return None
 
 def run(season, phase, limit=None):
+    from datetime import time as dtime
+    STOP_HOUR = 6  # 到6点自动停止
     conn = sqlite3.connect(DB_PATH, timeout=30)
     c = conn.cursor()
     sql = """SELECT id, screenshot_url FROM runs
@@ -74,6 +76,12 @@ def run(season, phase, limit=None):
             eta = elapsed / idx * (total - idx)
             print(f'进度: {idx}/{total} 成功:{ok} 失败:{fail} 预计剩余:{eta/3600:.1f}h')
             time.sleep(SLEEP_PER_BATCH)
+        if datetime.now().hour >= STOP_HOUR:
+            msg = f'已到 {STOP_HOUR} 点，本次停止。进度: {idx}/{total} 成功:{ok} 失败:{fail}'
+            logging.info(msg)
+            print(msg)
+            conn.close()
+            return
     conn.close()
     summary = f'完成! 总计{total} 成功{ok} 失败{fail}'
     logging.info(summary)
