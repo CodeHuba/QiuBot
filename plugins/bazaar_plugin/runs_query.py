@@ -486,7 +486,10 @@ class RunsQuery:
                 continue  # 跳过不在 mapping 里的卡
             zh = self.get_zh_name(en)
             name = zh if zh != en else en
-            results.append({"name": name, "total": total, "ten_win": ten_win, "rate": rate})
+            from . import card_image_helper as _cih
+            art_url = _cih.get_art_url(card_id=cid, internal_name=en, size='art') or ''
+            card_size = self.size_map.get(cid, 'Small')
+            results.append({"name": name, "total": total, "ten_win": ten_win, "rate": rate, "img": art_url, "size": card_size, "name_en": en})
 
         # 计算共现率（含目标卡的局里，搭档出现的比例）
         target_total = sum(1 for items_json, wins in rows

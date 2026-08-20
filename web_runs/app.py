@@ -336,12 +336,6 @@ def api_partner():
         client = RunsQuery()
         client.load()
         result = client.partner(card=card, days=days)
-        # 为每个搭档附上图片文件名
-        for lst in ('by_winrate', 'by_appear'):
-            for p in result.get(lst, []):
-                zh = p['name']
-                en = client.zh_to_en.get(zh, zh)
-                p['img'] = client.tex_map.get(en, '')
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('partner', {'card': card, 'days': days}, ip, len(result.get('by_winrate', [])), True)
         return jsonify(result)

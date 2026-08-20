@@ -1690,11 +1690,16 @@ function renderPartner(data) {
       const sub = rateKey === 'rate'
         ? `${p.ten_win}/${p.total} 局`
         : `${p.total}/${target_total} 局`;
+      const imgUrl = p.img || '';
+      const sizeCls = 'size-' + (p.size || 'Small');
+      const imgHtml = imgUrl ? `<img class="comp-card-img ${sizeCls}" src="${imgUrl}" alt="${p.name}" loading="lazy" onerror="this.style.display='none'">` : '';
+      const nameEn = p.name_en && p.name_en !== p.name ? `<div class="topcard-name-en">${p.name_en}</div>` : '';
       return `<div class="partner-item">
         <span class="partner-rank">${medals[i]}</span>
-        <div style="flex:1">
-          <div class="partner-name">${p.name}</div>
-          <div class="partner-sub">${sub}</div>
+        ${imgHtml}
+        <div class="topcard-name" style="flex:1">
+          <div class="topcard-name-zh">${p.name}</div>
+          ${nameEn}
         </div>
         <div style="text-align:right">
           <div class="partner-rate" style="color:${winrateColor(rate)}">${pct}%</div>
