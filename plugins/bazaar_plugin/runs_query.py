@@ -574,6 +574,7 @@ class RunsQuery:
                     card_wins[cid] = card_wins.get(cid, 0) + 1
 
         # 过滤低频卡，计算胜率
+        from . import card_image_helper as _cih
         results = []
         for cid, total in card_total.items():
             if total < min_count:
@@ -583,12 +584,17 @@ class RunsQuery:
             name_zh = self.get_zh_name(name_en)
             ten_win = card_wins.get(cid, 0)
             rate = ten_win / total if total > 0 else 0.0
+            art_url = _cih.get_art_url(card_id=cid, internal_name=name_en, size='art') or ''
+            card_size = self.size_map.get(cid, 'Small')
             results.append({
+                'cardId': cid,
                 'name_zh': name_zh if name_zh != name_en else name_en,
                 'name_en': name_en,
                 'total': total,
                 'ten_win': ten_win,
                 'rate': rate,
+                'img': art_url,
+                'size': card_size,
             })
 
         results.sort(key=lambda x: (-x['rate'], -x['total']))

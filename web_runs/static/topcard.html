@@ -1740,8 +1740,9 @@ function renderTopcard(data){
     const pct=(item.rate*100).toFixed(1);
     const color=rateColor(item.rate);
     const barW=Math.round(item.rate/maxRate*100);
-    const tex=item.img||'';
-    const imgHtml=tex?`<img src="/static/items/${tex}.webp" style="width:28px;height:28px;object-fit:contain;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'" loading="lazy">`:'';
+    const imgUrl = item.img || '';
+    const sizeCls = 'size-' + (item.size || 'Small');
+    const imgHtml = imgUrl ? `<img class="comp-card-img ${sizeCls}" src="${imgUrl}" alt="${item.name_zh}" loading="lazy" onerror="this.style.display='none'">` : '';
     return `<div class="topcard-item">
       <span class="topcard-rank">${medals[i]||i+1}</span>
       ${imgHtml}
