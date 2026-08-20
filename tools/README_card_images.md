@@ -33,7 +33,7 @@ tail -f /tmp/fetch_card_images.log
 ```json
 {
   "meta": {
-    "version": "17.2",
+    "version": "17.3",
     "total": 1943,
     "fetched": 1817,
     "skipped": 0,

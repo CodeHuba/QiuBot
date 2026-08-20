@@ -48,7 +48,7 @@ def main():
     # 加载已有数据
     result = {
         'meta': {
-            'version': '17.2',
+            'version': '17.3',
             'total': len(targets),
             'fetched': 0,
             'skipped': 0,
