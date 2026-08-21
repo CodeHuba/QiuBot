@@ -37,7 +37,7 @@ def _load():
         except Exception as e:
             print(f"[translations] 社区翻译加载失败: {e}")
     # 3. 加载 hash -> 中文映射（用于 tooltip Key 查翻译）
-    zh_bytes_file = CACHE_DIR.parent.parent / "AppData/LocalLow/Tempo Storm/The Bazaar/prod/cache/translations/zh-CN.bytes"
+    zh_bytes_file = CACHE_DIR.parent.parent.parent / "AppData/LocalLow/Tempo Storm/The Bazaar/prod/cache/translations/zh-CN.bytes"
     if not zh_bytes_file.exists():
         # Windows 游戏目录不在 WSL，用云服务器备份的 JSON
         zh_json_file = CACHE_DIR / "zh-CN.json"
