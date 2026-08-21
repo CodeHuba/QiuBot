@@ -1,3 +1,13 @@
+import fcntl, sys
+
+# 防止多实例：同时只允许一个 qiubot main.py 运行
+_lock_file = open('/tmp/qiubot.lock', 'w')
+try:
+    fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print('[qiubot] 已有实例在运行，退出。')
+    sys.exit(0)
+
 from ncatbot.core import BotClient
 import yaml, os
 
