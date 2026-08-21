@@ -10,9 +10,9 @@ if ! curl -sf --max-time 5 http://localhost:1027/api/heroes > /dev/null 2>&1; th
     ALERT="${ALERT}web_runs port 1027 无响应\n"
 fi
 
-# 检查 qiubot systemd 服务
-if ! systemctl is-active --quiet qiubot; then
-    ALERT="${ALERT}qiubot systemd 服务未运行\n"
+# 检查 qiubot 主进程
+if ! pgrep -f 'python.*main.py' | grep -v 'web_runs' > /dev/null; then
+    ALERT="${ALERT}qiubot 主进程未运行\n"
 fi
 
 # 检查数据库文件可访问性
