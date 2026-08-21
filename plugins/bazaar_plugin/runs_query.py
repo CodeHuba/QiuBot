@@ -640,7 +640,7 @@ class RunsQuery:
         TOP_CFG = 3
 
         global _comp_cache, _comp_cache_ttl
-        cache_key = (hero, 'v2')
+        cache_key = (hero, 'v3', all_phases, CURRENT_PHASE if not all_phases else None)
         if cache_key in _comp_cache:
             cached, exp = _comp_cache[cache_key]
             if time.time() < exp:
@@ -775,8 +775,9 @@ class RunsQuery:
         l1_stats = []
         for skel in l1_final:
             st = compute_stats(skel, all_decks)
-            if st and st['count'] >= l1_min_support:
-                l1_stats.append(st)
+            if st:
+                if st['count'] >= l1_min_support:
+                    l1_stats.append(st)
 
         if not l1_stats:
             return {'hero': hero, 'layers': [], 'total_runs': total_runs}
@@ -812,11 +813,8 @@ class RunsQuery:
             return result
 
         def get_effective_support(pool_size):
-            """根据数据量选择有效阈值（降级）"""
-            for threshold in FALLBACK_SUPPORTS:
-                if pool_size >= threshold:
-                    return threshold
-            return FALLBACK_SUPPORTS[-1]
+            """根据数据量选择有效阈值（降级）：取 pool_size 的 20%，但不低于 10"""
+            return max(10, int(pool_size * 0.2))
 
         # 全局独占认领：L2/L3 骨架只能归属一个父节点
         claimed_l2 = set()  # 已被认领的 L2 骨架
