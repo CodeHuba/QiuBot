@@ -687,7 +687,10 @@ class RunsQuery:
 
         all_decks = list(deck_stats.keys())
 
-        # 第二步：FP-Growth 挖掘频繁2-项集
+        # 第二步：FP-Growth 挖掘频繁2-项集（带降级机制）
+        FALLBACK_SUPPORTS = [MIN_SUPPORT, 20, 10]  # L1降级阈值，与L2/L3一致
+        cands_l1 = []
+        l1_min_support = MIN_SUPPORT  # 最终生效的L1支持度
         try:
             from mlxtend.preprocessing import TransactionEncoder
             from mlxtend.frequent_patterns import fpgrowth
@@ -696,9 +699,14 @@ class RunsQuery:
             te = TransactionEncoder()
             te_arr = te.fit(transactions).transform(transactions)
             df = pd.DataFrame(te_arr, columns=te.columns_)
-            freq_df = fpgrowth(df, min_support=MIN_SUPPORT / total_runs, use_colnames=True)
-            freq_df['length'] = freq_df['itemsets'].apply(len)
-            cands_l1 = [frozenset(r['itemsets']) for _, r in freq_df[freq_df['length'] == 2].iterrows()]
+            for fallback_sup in FALLBACK_SUPPORTS:
+                freq_df = fpgrowth(df, min_support=fallback_sup / total_runs, use_colnames=True)
+                freq_df['length'] = freq_df['itemsets'].apply(len)
+                cands = [frozenset(r['itemsets']) for _, r in freq_df[freq_df['length'] == 2].iterrows()]
+                if cands:
+                    cands_l1 = cands
+                    l1_min_support = fallback_sup
+                    break
         except Exception as e:
             return {'hero': hero, 'layers': [], 'total_runs': total_runs, 'error': str(e)}
 
@@ -763,11 +771,11 @@ class RunsQuery:
             if not any(len(c & ex) > 0 for ex in l1_final):
                 l1_final.append(c)
 
-        # 计算L1 stats
+        # 计算L1 stats（使用降级后的支持度）
         l1_stats = []
         for skel in l1_final:
             st = compute_stats(skel, all_decks)
-            if st and st['count'] >= MIN_SUPPORT:
+            if st and st['count'] >= l1_min_support:
                 l1_stats.append(st)
 
         if not l1_stats:
