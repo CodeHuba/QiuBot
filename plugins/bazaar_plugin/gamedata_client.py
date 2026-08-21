@@ -427,9 +427,13 @@ def get_tier_tooltips(item_data: dict, tier_name: str) -> list[str]:
         tip_cond = t.get("TooltipCondition")
         if tip_cond and tip_cond not in (None, "None"):
             continue  # Chilled/Heated/Enraged 等状态条件 tooltip 跳过
-        txt = t.get("Content", {}).get("Text", "")
+        content_obj = t.get("Content", {})
+        txt = content_obj.get("Text", "")
+        key = content_obj.get("Key", "")
         if txt:
-            tooltips.append(render_tooltip(txt, abilities, auras, tier_attrs))
+            from . import translations as _trans
+            zh_tpl = (key and _trans.get_zh_by_key(key)) or _trans.get_tooltip_zh(txt) or txt
+            tooltips.append(render_tooltip(zh_tpl, abilities, auras, tier_attrs))
 
     return tooltips
 
@@ -609,10 +613,12 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_e
                 tip_cond = t.get("TooltipCondition")
                 if tip_cond and tip_cond not in (None, "None"):
                     continue
-                txt = (t.get("Content") or {}).get("Text", "")
+                content_obj = t.get("Content") or {}
+                txt = content_obj.get("Text", "")
+                key = content_obj.get("Key", "")
                 if txt:
-                    # 先取中文模板（保留占位符），再渲染数值
-                    zh_tpl = trans.get_tooltip_zh(txt) or txt
+                    # 先用 Key 查 hash 翻译，再 fallback tooltip缓存，最后用原文
+                    zh_tpl = (key and trans.get_zh_by_key(key)) or trans.get_tooltip_zh(txt) or txt
                     zh_tpl = annotate_implicit_ability_attributes(zh_tpl, abilities)
                     rendered = render_tooltip(zh_tpl, abilities, auras, tier_attrs)
                     lines.append(rendered)
