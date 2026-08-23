@@ -1620,12 +1620,36 @@ input[type="range"]::-moz-range-thumb{width:18px;height:18px;background:var(--ne
           <option value="1">近 1 天</option>
         </select>
       </div>
+      <div class="form-group">
+        <label>排序方式</label>
+        <select id="topcard-sort" onchange="loadTopcard()">
+          <option value="total">出场数</option>
+          <option value="rate">胜率</option>
+          <option value="ten_win">胜场数</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>段位</label>
+        <select id="topcard-rank" onchange="loadTopcard()">
+          <option value="legendary">传奇</option>
+          <option value="all">全部段位</option>
+        </select>
+      </div>
     </div>
     <div id="topcard-result"><div class="loading">加载中...</div></div>
   </div>
 
   <!-- 阵容榜 -->
   <div id="panel-comp" style="display:none">
+    <div class="topcard-controls">
+      <div class="form-group">
+        <label>段位</label>
+        <select id="comp-rank" onchange="loadComp()">
+          <option value="legendary">传奇</option>
+          <option value="all">全部段位</option>
+        </select>
+      </div>
+    </div>
     <div class="slider-group" style="display:none">
       <label>相似卡数</label>
       <div class="slider-wrapper">
@@ -1717,7 +1741,9 @@ function onSliderChange(val){
 // ── 卡牌榜 ──
 async function loadTopcard(){
   const days=document.getElementById('topcard-days')?.value||'';
-  const key=currentHero+'_'+days;
+  const sort=document.getElementById('topcard-sort')?.value||'total';
+  const rank=document.getElementById('topcard-rank')?.value||'legendary';
+  const key=currentHero+'_'+days+'_'+sort+'_'+rank;
   if(_topcardCache[key]){renderTopcard(_topcardCache[key]);return;}
   const el=document.getElementById('topcard-result');
   el.innerHTML=`<div class="comp-progress-wrap">
@@ -1735,7 +1761,7 @@ async function loadTopcard(){
       if(lbl) lbl.textContent=pct.toFixed(0)+'%';
     }
   },200);
-  const p=new URLSearchParams({hero:currentHero,top:20});
+  const p=new URLSearchParams({hero:currentHero,top:20,sort_by:sort,rank:rank});
   if(days)p.set('days',days);
   try{
     const r=await fetch('/api/topcard?'+p);
@@ -1790,7 +1816,8 @@ function renderTopcard(data){
 
 // ── 阵容榜 ──
 async function loadComp(){
-  const key=currentHero;
+  const rank=document.getElementById('comp-rank')?.value||'legendary';
+  const key=currentHero+'_'+rank;
   if(_compCache[key]){renderComp(_compCache[key]);return;}
 
   // 进度条
@@ -1814,7 +1841,7 @@ async function loadComp(){
     }
   },200);
 
-  const p=new URLSearchParams({hero:currentHero});
+  const p=new URLSearchParams({hero:currentHero,rank:rank});
   try{
     const r=await fetch('/api/comp?'+p);
     const d=await r.json();

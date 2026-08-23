@@ -520,7 +520,9 @@ class RunsQuery:
                 top_n: int = 5,
                 days: int = None,
                 min_count: int = 50,
-                all_phases: bool = False) -> dict:
+                all_phases: bool = False,
+                sort_by: str = "total",
+                rank_filter: str = "legendary") -> dict:
         """
         查询某个职业下胜率最高的 top_n 张物品卡（只统计该职业专属卡）。
         统计该职业所有 runs 中每张卡的出现次数、胜场数（stat_wins >= 10）、胜率。
@@ -532,7 +534,7 @@ class RunsQuery:
 
         # 读取缓存
         global _topcard_cache, _topcard_cache_ttl
-        _tc_key = (hero, top_n, days, all_phases)
+        _tc_key = (hero, top_n, days, all_phases, sort_by, rank_filter)
         if _tc_key in _topcard_cache:
             _cached, _exp = _topcard_cache[_tc_key]
             if _time.time() < _exp:
@@ -551,6 +553,8 @@ class RunsQuery:
             cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
             sql += " AND created_at >= ?"
             params.append(cutoff)
+        if rank_filter == 'legendary':
+            sql += " AND player_rank='Legendary'"
         rows = self.conn.execute(sql, params).fetchall()
 
         # 统计每张卡的出现次数和胜场数（只统计该职业专属卡）
@@ -600,7 +604,13 @@ class RunsQuery:
                 'size': card_size,
             })
 
-        results.sort(key=lambda x: (-x['rate'], -x['total']))
+        # 按指定方式排序
+        if sort_by == 'rate':
+            results.sort(key=lambda x: (-x['rate'], -x['total']))
+        elif sort_by == 'ten_win':
+            results.sort(key=lambda x: (-x['ten_win'], -x['rate']))
+        else:  # total
+            results.sort(key=lambda x: (-x['total'], -x['rate']))
         top = results[:top_n]
 
         hero_map = {'Vanessa': '海盗/凡妮莎', 'Dooley': '工程师/杜利',
@@ -625,7 +635,8 @@ class RunsQuery:
              top_k: int = 10,
              min_count: int = 50,
              min_config_count: int = 5,
-             all_phases: bool = False) -> dict:
+             all_phases: bool = False,
+             rank_filter: str = "legendary") -> dict:
         """四层嵌套阵容榜 L1(2张)→L2(3张)→L3(4张)→具体配置"""
         import json as _json
         import time
@@ -640,7 +651,7 @@ class RunsQuery:
         TOP_CFG = 3
 
         global _comp_cache, _comp_cache_ttl
-        cache_key = (hero, 'v3', all_phases, CURRENT_PHASE if not all_phases else None)
+        cache_key = (hero, 'v3', all_phases, CURRENT_PHASE if not all_phases else None, rank_filter)
         if cache_key in _comp_cache:
             cached, exp = _comp_cache[cache_key]
             if time.time() < exp:
@@ -654,6 +665,8 @@ class RunsQuery:
         if not all_phases:
             sql += " AND phase=?"
             params.append(CURRENT_PHASE)
+        if rank_filter == 'legendary':
+            sql += " AND player_rank='Legendary'"
         rows = self.conn.execute(sql, params).fetchall()
 
         # 第一步：完全相同卡组去重，累加出场/胜场

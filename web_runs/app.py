@@ -481,11 +481,13 @@ def api_topcard():
     if days:
         days = int(days)
     all_phases = request.args.get('all_phases') == 'true'
+    sort_by = request.args.get('sort_by', 'total')  # total/rate/ten_win
+    rank_filter = request.args.get('rank', 'legendary')  # legendary/all
     ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr))
     try:
         query = RunsQuery()
-        result = query.topcard(hero=hero, top_n=top_n, days=days, all_phases=all_phases)
-        _log_query('topcard', {'hero': hero, 'top': top_n, 'days': days, 'all_phases': all_phases}, ip, len(result.get('top', [])), True)
+        result = query.topcard(hero=hero, top_n=top_n, days=days, all_phases=all_phases, sort_by=sort_by, rank_filter=rank_filter)
+        _log_query('topcard', {'hero': hero, 'top': top_n, 'days': days, 'all_phases': all_phases, 'sort_by': sort_by, 'rank': rank_filter}, ip, len(result.get('top', [])), True)
         return jsonify(result)
     except Exception as e:
         _log_query('topcard', {'hero': hero}, ip, 0, False)
@@ -502,6 +504,8 @@ def api_comp():
     n = min(max(int(request.args.get('n', 3)), 2), 4)
     top_k = min(int(request.args.get('top', 10)), 20)
     all_phases = request.args.get('all_phases') == 'true'
+    sort_by = request.args.get('sort_by', 'total')  # total/rate/ten_win
+    rank_filter = request.args.get('rank', 'legendary')  # legendary/all
     ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr))
     if not hero_raw:
         return jsonify({'error': '请指定职业'}), 400
