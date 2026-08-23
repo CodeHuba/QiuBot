@@ -979,12 +979,91 @@ class RunsQuery:
 
 
 # comp 方法内存缓存 {(hero, n): (result, expire_time)}
+
+    def hero_overview(self,
+                     days: int = None,
+                     sort_by: str = 'total',
+                     rank_filter: str = 'legendary') -> dict:
+        """职业整体概况：所有职业的出场数、胜场数、胜率横向对比"""
+        import json as _json
+        import time as _time
+        from datetime import datetime as _dt, timedelta as _td
+
+        global _hero_overview_cache, _hero_overview_cache_ttl
+        _ho_key = (days, sort_by, rank_filter)
+        if _ho_key in _hero_overview_cache:
+            _cached, _exp = _hero_overview_cache[_ho_key]
+            if _time.time() < _exp:
+                return _cached
+
+        if not self.conn:
+            self.load()
+
+        sql = "SELECT hero, stat_wins FROM runs WHERE season=? AND phase=?"
+        params = [RUNS_SEASON_ID, CURRENT_PHASE]
+        if rank_filter == 'legendary':
+            sql += " AND player_rank='Legendary'"
+        if days:
+            cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
+            sql += " AND created_at >= ?"
+            params.append(cutoff)
+        rows = self.conn.execute(sql, params).fetchall()
+
+        from collections import defaultdict
+        hero_stats = defaultdict(lambda: {'total': 0, 'wins': 0})
+        for hero, stat_wins in rows:
+            if not hero:
+                continue
+            hero_stats[hero]['total'] += 1
+            if (stat_wins or 0) >= 10:
+                hero_stats[hero]['wins'] += 1
+
+        results = []
+        hero_map = {
+            'Vanessa': '海盗/凡妮莎', 'Dooley': '工程师/杜利',
+            'Mak': '法师/马克', 'Pygmalien': '猪/皮格',
+            'Stelle': '机甲/斯黛拉', 'Jules': '吸血鬼/朱尔斯',
+            'Karnok': '兽人/卡诺克', 'The Dragons': '双龙'
+        }
+        for hero, stats in hero_stats.items():
+            total = stats['total']
+            wins = stats['wins']
+            rate = wins / total if total > 0 else 0.0
+            results.append({
+                'hero': hero,
+                'hero_zh': hero_map.get(hero, hero),
+                'total': total,
+                'wins': wins,
+                'rate': rate
+            })
+
+        if sort_by == 'rate':
+            results.sort(key=lambda x: (-x['rate'], -x['total']))
+        elif sort_by == 'wins':
+            results.sort(key=lambda x: (-x['wins'], -x['rate']))
+        else:
+            results.sort(key=lambda x: (-x['total'], -x['rate']))
+
+        _ho_result = {
+            'heroes': results,
+            'total_runs': len(rows),
+            'days': days,
+            'sort_by': sort_by,
+            'rank_filter': rank_filter
+        }
+
+        _hero_overview_cache[_ho_key] = (_ho_result, _time.time() + _hero_overview_cache_ttl)
+        return _ho_result
+
 _comp_cache: dict = {}
 _comp_cache_ttl = 3600  # 1小时
 
 # topcard 方法内存缓存 {(hero, top_n, days, all_phases): (result, expire_time)}
 _topcard_cache: dict = {}
 _topcard_cache_ttl = 3600  # 1小时
+
+_hero_overview_cache: dict = {}
+_hero_overview_cache_ttl = 3600  # 1小时
 
 _client = None
 

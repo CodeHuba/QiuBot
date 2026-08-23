@@ -1572,6 +1572,116 @@ input[type="range"]::-moz-range-thumb{width:18px;height:18px;background:var(--ne
   .slider-group{flex-direction:column;align-items:flex-start;}
   input[type="range"]{width:100%;max-width:260px;}
 }
+
+/* 职业概况 */
+.hero-overview-section {
+  margin-bottom: 32px;
+  padding: 20px;
+  background: var(--bg-surface);
+  border: 1px solid rgba(138,77,255,0.25);
+  border-radius: 10px;
+}
+.overview-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--neon-magenta);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.overview-title::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background: var(--neon-cyan);
+  border-radius: 2px;
+}
+.overview-controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.overview-controls .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 10px;
+}
+@media (max-width: 1200px) {
+  .overview-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 768px) {
+  .overview-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.overview-card {
+  background: rgba(9,10,42,0.6);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 12px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.overview-card:hover {
+  border-color: var(--neon-cyan);
+  background: rgba(38,217,242,0.06);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(38,217,242,0.12);
+}
+.overview-card.rank-1::before { content: '🥇'; position: absolute; top: 8px; left: 10px; font-size: 14px; }
+.overview-card.rank-2::before { content: '🥈'; position: absolute; top: 8px; left: 10px; font-size: 14px; }
+.overview-card.rank-3::before { content: '🥉'; position: absolute; top: 8px; left: 10px; font-size: 14px; }
+.overview-hero {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  text-align: center;
+}
+.overview-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+}
+.overview-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.overview-stat.highlight {
+  background: rgba(38,217,242,0.1);
+}
+.overview-stat-label {
+  color: var(--text-secondary);
+}
+.overview-stat-value {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.overview-stat-value.rate-high { color: var(--neon-teal); }
+.overview-stat-value.rate-mid { color: var(--neon-gold); }
+.overview-stat-value.rate-low { color: var(--neon-coral); }
+.overview-bar-wrap {
+  height: 3px;
+  background: rgba(138,77,255,0.15);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.overview-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+}
+
 </style>
 </head>
 <body>
@@ -1591,6 +1701,39 @@ input[type="range"]::-moz-range-thumb{width:18px;height:18px;background:var(--ne
 
 <div class="main">
   <!-- 一级职业 tab -->
+
+  <!-- 职业概况 -->
+  <div class="hero-overview-section">
+    <div class="overview-title">职业概况</div>
+    <div class="overview-controls">
+      <div class="form-group">
+        <label>时间范围</label>
+        <select id="overview-days" onchange="loadOverview()">
+          <option value="">全赛段</option>
+          <option value="7">近 7 天</option>
+          <option value="3">近 3 天</option>
+          <option value="1">近 1 天</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>段位</label>
+        <select id="overview-rank" onchange="loadOverview()">
+          <option value="legendary">传奇</option>
+          <option value="all">全部段位</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>排序方式</label>
+        <select id="overview-sort" onchange="loadOverview()">
+          <option value="total">出场数</option>
+          <option value="wins">胜场数</option>
+          <option value="rate">胜率</option>
+        </select>
+      </div>
+    </div>
+    <div id="overview-result"><div class="loading">加载中...</div></div>
+  </div>
+
   <div class="hero-tabs">
     <button class="hero-tab active" onclick="switchHero('Vanessa',this)">凡妮莎</button>
     <button class="hero-tab" onclick="switchHero('Dooley',this)">杜利</button>
@@ -1739,6 +1882,126 @@ function onSliderChange(val){
 }
 
 // ── 卡牌榜 ──
+
+// ── 职业概况 ──
+const _overviewCache = {};
+
+async function loadOverview() {
+  const days = document.getElementById('overview-days')?.value || '';
+  const rank = document.getElementById('overview-rank')?.value || 'legendary';
+  const sort = document.getElementById('overview-sort')?.value || 'total';
+  const key = days + '_' + rank;
+
+  // 已有缓存，直接前端排序渲染
+  if (_overviewCache[key]) {
+    renderOverview(_overviewCache[key], sort);
+    return;
+  }
+
+  const el = document.getElementById('overview-result');
+  el.innerHTML = '<div class="loading">加载中...</div>';
+
+  // 不传 sort_by，后端只负责返回原始数据
+  const p = new URLSearchParams({ rank: rank });
+  if (days) p.set('days', days);
+
+  try {
+    const r = await fetch('/api/hero_overview?' + p);
+    const d = await r.json();
+    if (d.error) {
+      el.innerHTML = '<div class="error-msg">' + d.error + '</div>';
+      return;
+    }
+    _overviewCache[key] = d;
+    renderOverview(d, sort);
+  } catch (e) {
+    el.innerHTML = '<div class="error-msg">请求失败: ' + e.message + '</div>';
+  }
+}
+
+function renderOverview(data, sortBy) {
+  let heroes = [...(data.heroes || [])];
+  if (!heroes.length) {
+    document.getElementById('overview-result').innerHTML = '<div class="empty">暂无数据</div>';
+    return;
+  }
+
+  // 前端排序
+  if (sortBy === 'rate') {
+    heroes.sort((a, b) => b.rate - a.rate || b.total - a.total);
+  } else if (sortBy === 'wins') {
+    heroes.sort((a, b) => b.wins - a.wins || b.rate - a.rate);
+  } else {
+    heroes.sort((a, b) => b.total - a.total || b.rate - a.rate);
+  }
+
+  const cards = heroes.map((h, i) => {
+    const rankCls = i < 3 ? ' rank-' + (i + 1) : '';
+    const rate = (h.rate * 100).toFixed(1);
+    const rateColor = h.rate >= 0.55 ? 'rate-high' : (h.rate >= 0.45 ? 'rate-mid' : 'rate-low');
+    
+    const maxVal = Math.max(...heroes.map(x => x[sortBy === 'rate' ? 'rate' : sortBy]));
+    const barWidth = sortBy === 'rate' 
+      ? Math.round((h.rate / maxVal) * 100)
+      : Math.round((h[sortBy] / maxVal) * 100);
+    const barColor = rateColor.replace('rate-', '');
+    const barColorMap = { high: 'var(--neon-teal)', mid: 'var(--neon-gold)', low: 'var(--neon-coral)' };
+    
+    return `<div class="overview-card${rankCls}" onclick="jumpToHero('${h.hero}')">
+      <div class="overview-hero">${h.hero_zh}</div>
+      <div class="overview-stats">
+        <div class="overview-stat${sortBy === 'total' ? ' highlight' : ''}">
+          <span class="overview-stat-label">出场</span>
+          <span class="overview-stat-value">${h.total.toLocaleString()}</span>
+        </div>
+        <div class="overview-stat${sortBy === 'wins' ? ' highlight' : ''}">
+          <span class="overview-stat-label">胜场</span>
+          <span class="overview-stat-value">${h.wins.toLocaleString()}</span>
+        </div>
+        <div class="overview-stat${sortBy === 'rate' ? ' highlight' : ''}">
+          <span class="overview-stat-label">胜率</span>
+          <span class="overview-stat-value ${rateColor}">${rate}%</span>
+        </div>
+      </div>
+      <div class="overview-bar-wrap">
+        <div class="overview-bar" style="width:${barWidth}%;background:${barColorMap[barColor]}"></div>
+      </div>
+    </div>`;
+  }).join('');
+  
+  document.getElementById('overview-result').innerHTML = '<div class="overview-grid">' + cards + '</div>';
+}
+
+function jumpToHero(heroEn) {
+  // 切换职业
+  currentHero = heroEn;
+  document.querySelectorAll('.hero-tab').forEach((t, i) => {
+    const heroes = ['Vanessa', 'Dooley', 'Mak', 'Pygmalien', 'Stelle', 'Jules', 'Karnok', 'The Dragons'];
+    if (heroes[i] === heroEn) {
+      t.classList.add('active');
+    } else {
+      t.classList.remove('active');
+    }
+  });
+  
+  // 清除该职业缓存并加载卡牌榜
+  delete _topcardCache[heroEn];
+  delete _compCache[heroEn];
+  if (currentContent === 'topcard') {
+    loadTopcard();
+  } else {
+    switchContent('topcard');
+  }
+  
+  // 滚动到职业选择器
+  document.querySelector('.hero-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 页面加载时自动加载概况
+window.addEventListener('DOMContentLoaded', () => {
+  loadOverview();
+});
+
 async function loadTopcard(){
   const days=document.getElementById('topcard-days')?.value||'';
   const sort=document.getElementById('topcard-sort')?.value||'total';

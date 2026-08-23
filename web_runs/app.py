@@ -536,6 +536,26 @@ def _fb_conn():
 def _allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
 
+
+@app.route('/api/hero_overview', methods=['GET'])
+def api_hero_overview():
+    from plugins.bazaar_plugin.runs_query import RunsQuery
+    days = request.args.get('days')
+    if days:
+        days = int(days)
+    sort_by = request.args.get('sort_by', 'total')  # total/wins/rate
+    rank_filter = request.args.get('rank', 'legendary')  # legendary/all
+    ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr))
+    try:
+        query = RunsQuery()
+        result = query.hero_overview(days=days, sort_by=sort_by, rank_filter=rank_filter)
+        _log_query('hero_overview', {'days': days, 'sort_by': sort_by, 'rank': rank_filter}, ip, len(result.get('heroes', [])), True)
+        return jsonify(result)
+    except Exception as e:
+        _log_query('hero_overview', {}, ip, 0, False)
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/feedback', methods=['GET'])
 def api_feedback_list():
     page = int(request.args.get('page', 1))
