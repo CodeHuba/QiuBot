@@ -8,6 +8,8 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐉</text></svg>">
 <!-- marked.js for Markdown rendering -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- html2canvas for share image generation -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 :root {
   --bg-deep: #090A2A;
@@ -523,6 +525,253 @@ body::before {
   border-top: 1px solid rgba(138,77,255,0.1);
 }
 
+/* ===== 分享按钮 ===== */
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(38,217,242,0.2);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.share-btn:hover {
+  border-color: rgba(38,217,242,0.5);
+  color: var(--neon-cyan);
+  background: rgba(38,217,242,0.08);
+}
+.share-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== 分享弹窗 ===== */
+.share-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.share-modal {
+  background: var(--bg-surface);
+  border: 1px solid rgba(38,217,242,0.2);
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 0 40px rgba(38,217,242,0.1);
+}
+.share-modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.share-modal-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+.share-modal img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+}
+.share-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.share-modal-close {
+  flex: 1;
+  padding: 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(181,179,215,0.2);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.share-modal-close:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+.share-modal-download {
+  flex: 1;
+  padding: 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(38,217,242,0.3);
+  background: rgba(38,217,242,0.08);
+  color: var(--neon-cyan);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  text-decoration: none;
+  text-align: center;
+  display: block;
+}
+.share-modal-download:hover {
+  background: rgba(38,217,242,0.15);
+  box-shadow: 0 0 12px rgba(38,217,242,0.2);
+}
+
+/* ===== 分享卡片（截图用，隐藏在页面外） ===== */
+#share-card-container {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 600px;
+  background: var(--bg-deep);
+}
+.share-card {
+  width: 600px;
+  background: #090A2A;
+  padding: 32px 28px 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.share-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(38,217,242,0.15);
+}
+.share-card-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #26D9F2;
+  background: rgba(38,217,242,0.1);
+  border: 1px solid rgba(38,217,242,0.25);
+  border-radius: 4px;
+  padding: 3px 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.share-card-site {
+  font-size: 12px;
+  color: rgba(181,179,215,0.5);
+  margin-left: auto;
+  letter-spacing: 0.03em;
+}
+.share-card-question {
+  font-size: 18px;
+  font-weight: 700;
+  color: #F5F4FF;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.share-card-answer {
+  font-size: 13px;
+  color: #B5B3D7;
+  line-height: 1.8;
+}
+.share-card-answer h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #F5C76A;
+  margin: 16px 0 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(245,199,106,0.15);
+}
+.share-card-answer h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #26D9F2;
+  margin: 12px 0 6px;
+}
+.share-card-answer p {
+  margin-bottom: 8px;
+  color: #B5B3D7;
+}
+.share-card-answer strong {
+  color: #F5F4FF;
+  font-weight: 700;
+}
+.share-card-answer table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.share-card-answer th {
+  background: rgba(138,77,255,0.15);
+  color: #8A4DFF;
+  padding: 7px 10px;
+  text-align: left;
+  font-weight: 700;
+  border: 1px solid rgba(138,77,255,0.2);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.share-card-answer td {
+  padding: 7px 10px;
+  border: 1px solid rgba(138,77,255,0.12);
+  color: #B5B3D7;
+}
+.share-card-answer code {
+  background: rgba(38,217,242,0.08);
+  border: 1px solid rgba(38,217,242,0.15);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+  color: #26D9F2;
+  font-family: 'Courier New', monospace;
+}
+.share-card-answer blockquote {
+  border-left: 3px solid #F5C76A;
+  padding: 6px 14px;
+  margin: 8px 0;
+  background: rgba(245,199,106,0.05);
+  border-radius: 0 4px 4px 0;
+}
+.share-card-answer ul, .share-card-answer ol {
+  padding-left: 18px;
+  margin-bottom: 8px;
+}
+.share-card-answer li {
+  margin-bottom: 3px;
+}
+.share-card-answer hr {
+  border: none;
+  border-top: 1px solid rgba(138,77,255,0.15);
+  margin: 12px 0;
+}
+.share-card-footer {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(138,77,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.share-card-footer-logo {
+  font-size: 13px;
+  font-weight: 700;
+  color: #F438B8;
+  letter-spacing: 0.03em;
+}
+.share-card-footer-desc {
+  font-size: 11px;
+  color: rgba(181,179,215,0.4);
+}
+
 /* ===== 空状态 / 加载 ===== */
 .loading-state {
   text-align: center;
@@ -921,7 +1170,9 @@ function renderTrivia() {
                 onclick="vote(${t.id}, 'downvote')" id="dn-${t.id}">
                 👎 <span id="dn-cnt-${t.id}">${t.downvotes}</span>
               </button>
+              ${hasAnswer ? `<button class="share-btn" onclick="event.stopPropagation();shareTrivia(${t.id})" id="share-btn-${t.id}">📤 分享</button>` : ''}
             </div>
+            
           </div>
         </div>
         <div class="expand-arrow">▾</div>
@@ -1036,6 +1287,80 @@ async function submitAsk() {
 
 /* ===== 初始化 ===== */
 window.addEventListener('DOMContentLoaded', loadTrivia);
+</script>
+
+<!-- 分享卡片容器（隐藏，截图用） -->
+<div id="share-card-container">
+  <div class="share-card" id="share-card">
+    <div class="share-card-header">
+      <span class="share-card-tag">冷知识</span>
+      <span class="share-card-site">bazaarqiubot.com</span>
+    </div>
+    <div class="share-card-question" id="share-card-question"></div>
+    <div class="share-card-answer" id="share-card-answer"></div>
+    <div class="share-card-footer">
+      <span class="share-card-footer-logo">⚡ bazaarqiubot.com</span>
+      <span class="share-card-footer-desc">The Bazaar 中文社区数据平台</span>
+    </div>
+  </div>
+</div>
+
+<script>
+async function shareTrivia(id) {
+  const t = triviaData.find(x => x.id === id);
+  if (!t || !t.answer) return;
+
+  const btn = document.getElementById('share-btn-' + id);
+  if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+
+  try {
+    // 填充分享卡片内容
+    document.getElementById('share-card-question').textContent = t.question;
+    document.getElementById('share-card-answer').innerHTML = renderMd(t.answer);
+
+    // 截图
+    const card = document.getElementById('share-card');
+    const canvas = await html2canvas(card, {
+      backgroundColor: '#090A2A',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+
+    const imgUrl = canvas.toDataURL('image/png');
+
+    // 显示弹窗
+    showShareModal(imgUrl, t.question);
+  } catch (e) {
+    alert('生成图片失败，请重试');
+    console.error(e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📤 分享'; }
+  }
+}
+
+function showShareModal(imgUrl, title) {
+  // 移除旧弹窗
+  const old = document.getElementById('share-modal-overlay');
+  if (old) old.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'share-modal-overlay';
+  overlay.id = 'share-modal-overlay';
+  overlay.innerHTML = `
+    <div class="share-modal">
+      <div class="share-modal-title">分享图片已生成</div>
+      <div class="share-modal-hint">长按图片保存，或点击下载后分享到微信/QQ</div>
+      <img src="${imgUrl}" alt="分享图片">
+      <div class="share-modal-actions">
+        <button class="share-modal-close" onclick="document.getElementById('share-modal-overlay').remove()">关闭</button>
+        <a class="share-modal-download" href="${imgUrl}" download="bazaarqiubot-trivia.png">⬇ 下载图片</a>
+      </div>
+    </div>
+  `;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
 </script>
 </body>
 </html>
