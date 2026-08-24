@@ -1513,6 +1513,13 @@ input[type="file"] {
         <label>天数</label>
         <input id="pt-days" type="number" placeholder="不限" min="1" style="width:90px">
       </div>
+      <div class="form-group">
+        <label>段位</label>
+        <select id="pt-rank">
+          <option value="all" selected>全部段位</option>
+          <option value="legendary">传奇</option>
+        </select>
+      </div>
       <button class="btn btn-primary" onclick="queryPartner()">查询</button>
     </div>
   </div>
@@ -1670,9 +1677,10 @@ async function queryPartner() {
   showError('pt-error', '');
   const card = document.getElementById('pt-card').value.trim();
   const days = document.getElementById('pt-days').value;
+  const rank = document.getElementById('pt-rank').value;
   if (!card) { showError('pt-error', '请输入卡牌名称'); return; }
   document.getElementById('pt-result').innerHTML = '<div class="loading">查询中...</div>';
-  const params = new URLSearchParams({card});
+  const params = new URLSearchParams({card, rank});
   if (days) params.set('days', days);
   try {
     const res = await fetch('/api/partner?' + params);
