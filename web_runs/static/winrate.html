@@ -1533,6 +1533,13 @@ input[type="file"] {
         <label>天数</label>
         <input id="wr-days" type="number" placeholder="不限" min="1" style="width:90px">
       </div>
+      <div class="form-group">
+        <label>段位</label>
+        <select id="wr-rank">
+          <option value="all" selected>全部段位</option>
+          <option value="legendary">传奇</option>
+        </select>
+      </div>
       <button class="btn btn-primary" onclick="queryWinrate()">查询</button>
     </div>
   </div>
@@ -1648,9 +1655,10 @@ async function queryWinrate() {
   const cards = document.getElementById('wr-cards').value.trim();
   const hero = document.getElementById('wr-hero').value;
   const days = document.getElementById('wr-days').value;
+  const rank = document.getElementById('wr-rank').value;
   if (!cards) { showError('wr-error', '请输入至少一张卡牌'); return; }
   document.getElementById('wr-result').innerHTML = '<div class="loading">查询中...</div>';
-  const params = new URLSearchParams({cards});
+  const params = new URLSearchParams({cards, rank});
   if (hero) params.set('hero', hero);
   if (days) params.set('days', days);
   try {

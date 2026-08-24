@@ -165,7 +165,8 @@ class RunsQuery:
               days: Optional[int] = None,
               min_wins: Optional[int] = None,
               page: int = 1,
-              page_size: int = 5) -> Dict:
+              page_size: int = 5,
+              rank_filter: str = "all") -> Dict:
         """
         查询 runs，返回 {runs, total, page, pages, query_desc}
         """
@@ -186,6 +187,8 @@ class RunsQuery:
         if min_wins:
             sql += " AND stat_wins >= ?"
             params.append(min_wins)
+        if rank_filter == 'legendary':
+            sql += " AND player_rank='Legendary'"
 
         sql += " ORDER BY created_at DESC"
         rows = self.conn.execute(sql, params).fetchall()
@@ -341,7 +344,8 @@ class RunsQuery:
                 hero: str = None,
                 days: int = None,
                 min_wins_threshold: int = 10,
-                all_phases: bool = False) -> dict:
+                all_phases: bool = False,
+                rank_filter: str = "all") -> dict:
         """
         计算包含指定卡牌组合的 runs 中，达到 min_wins_threshold 胜的比率。
         返回 {total, ten_win, rate, card_names, not_found}
@@ -383,6 +387,8 @@ class RunsQuery:
             cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
             sql += " AND created_at >= ?"
             params.append(cutoff)
+        if rank_filter == 'legendary':
+            sql += " AND player_rank='Legendary'"
         rows = self.conn.execute(sql, params).fetchall()
 
         total = 0
@@ -415,7 +421,8 @@ class RunsQuery:
                 min_count: int = 50,
                 top_n: int = 3,
                 wins_threshold: int = 10,
-                all_phases: bool = False) -> dict:
+                all_phases: bool = False,
+                rank_filter: str = "all") -> dict:
         """
         查询与某张卡搭配时胜率最高的前 top_n 张搭档卡。
         只统计出现次数 >= min_count 的搭档。
@@ -448,6 +455,8 @@ class RunsQuery:
             cutoff = (_dt.utcnow() - _td(days=days)).isoformat()
             sql += " AND created_at >= ?"
             params.append(cutoff)
+        if rank_filter == 'legendary':
+            sql += " AND player_rank='Legendary'"
         rows = self.conn.execute(sql, params).fetchall()
 
         # 统计每张搭档卡的出现次数和10胜次数
@@ -522,7 +531,7 @@ class RunsQuery:
                 min_count: int = 50,
                 all_phases: bool = False,
                 sort_by: str = "total",
-                rank_filter: str = "legendary") -> dict:
+                rank_filter: str = "all") -> dict:
         """
         查询某个职业下胜率最高的 top_n 张物品卡（只统计该职业专属卡）。
         统计该职业所有 runs 中每张卡的出现次数、胜场数（stat_wins >= 10）、胜率。
@@ -636,7 +645,7 @@ class RunsQuery:
              min_count: int = 50,
              min_config_count: int = 5,
              all_phases: bool = False,
-             rank_filter: str = "legendary") -> dict:
+             rank_filter: str = "all") -> dict:
         """四层嵌套阵容榜 L1(2张)→L2(3张)→L3(4张)→具体配置"""
         import json as _json
         import time
@@ -983,7 +992,7 @@ class RunsQuery:
     def hero_overview(self,
                      days: int = None,
                      sort_by: str = 'total',
-                     rank_filter: str = 'legendary') -> dict:
+                     rank_filter: str = 'all') -> dict:
         """职业整体概况：所有职业的出场数、胜场数、胜率横向对比"""
         import json as _json
         import time as _time

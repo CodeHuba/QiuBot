@@ -278,6 +278,7 @@ def api_runs():
     days = request.args.get('days', type=int)
     min_wins = request.args.get('min_wins', default=10, type=int)
     page = request.args.get('page', default=1, type=int)
+    rank_filter = request.args.get('rank', 'all')
 
     try:
         client = RunsQuery()
@@ -287,9 +288,9 @@ def api_runs():
             if not resolved:
                 return jsonify({'error': f'未识别的英雄: {hero}'}), 400
             hero = resolved
-        result = client.query(hero=hero, cards=cards, days=days, min_wins=min_wins, page=page)
+        result = client.query(hero=hero, cards=cards, days=days, min_wins=min_wins, page=page, rank_filter=rank_filter)
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
-        _log_query('runs', {'hero': hero, 'cards': cards, 'days': days, 'min_wins': min_wins, 'page': page},
+        _log_query('runs', {'hero': hero, 'cards': cards, 'days': days, 'min_wins': min_wins, 'page': page, 'rank': rank_filter},
                    ip, result.get('total', 0), True)
         return jsonify(result)
     except Exception as e:
@@ -305,6 +306,7 @@ def api_winrate():
     cards = [c.strip() for c in cards_raw.split('+') if c.strip()]
     hero_raw = request.args.get('hero', '').strip() or None
     days = request.args.get('days', type=int)
+    rank_filter = request.args.get('rank', 'all')
 
     if not cards:
         return jsonify({'error': '请指定至少一张卡牌'}), 400
@@ -313,9 +315,9 @@ def api_winrate():
         client = RunsQuery()
         client.load()
         hero = client.resolve_hero(hero_raw) if hero_raw else None
-        result = client.winrate(cards=cards, hero=hero, days=days)
+        result = client.winrate(cards=cards, hero=hero, days=days, rank_filter=rank_filter)
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
-        _log_query('winrate', {'cards': cards, 'hero': hero_raw, 'days': days}, ip, result.get('total', 0), True)
+        _log_query('winrate', {'cards': cards, 'hero': hero_raw, 'days': days, 'rank': rank_filter}, ip, result.get('total', 0), True)
         return jsonify(result)
     except Exception as e:
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
@@ -328,6 +330,7 @@ def api_winrate():
 def api_partner():
     card = request.args.get('card', '').strip()
     days = request.args.get('days', type=int)
+    rank_filter = request.args.get('rank', 'all')
 
     if not card:
         return jsonify({'error': '请指定卡牌名称'}), 400
@@ -335,9 +338,9 @@ def api_partner():
     try:
         client = RunsQuery()
         client.load()
-        result = client.partner(card=card, days=days)
+        result = client.partner(card=card, days=days, rank_filter=rank_filter)
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
-        _log_query('partner', {'card': card, 'days': days}, ip, len(result.get('by_winrate', [])), True)
+        _log_query('partner', {'card': card, 'days': days, 'rank': rank_filter}, ip, len(result.get('by_winrate', [])), True)
         return jsonify(result)
     except Exception as e:
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
