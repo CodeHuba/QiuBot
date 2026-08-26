@@ -862,7 +862,13 @@ def api_stats_overview():
     days = int(request.args.get('days', 7))
     try:
         conn = _sl.connect(STATS_DB)
-        cutoff = (datetime.utcnow() - __import__('datetime').timedelta(days=days)).isoformat()
+        # cutoff 按北京时间自然日计算（UTC+8），避免滚动窗口导致跨天数据不一致
+        import datetime as _dt2
+        _now_bj = datetime.utcnow() + _dt2.timedelta(hours=8)
+        _today_bj = _now_bj.replace(hour=0, minute=0, second=0, microsecond=0)
+        _cutoff_bj = _today_bj - _dt2.timedelta(days=days - 1)
+        # 转回 UTC 存入 cutoff
+        cutoff = (_cutoff_bj - _dt2.timedelta(hours=8)).isoformat()
 
         # API 总调用量
         total_calls = conn.execute('SELECT COUNT(*) FROM api_log WHERE created_at >= ?', (cutoff,)).fetchone()[0]
