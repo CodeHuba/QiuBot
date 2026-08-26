@@ -41,7 +41,7 @@ def _infer_wins(prev_r: int, delta: int) -> int:
     if delta > 0:
         # 加分：先尝试有 10 胜奖励（减去 5），再尝试无奖励
         for bonus in (5, 0):
-            if delta <= bonus:
+            if delta < bonus:
                 continue
             round_val = delta - bonus
             w_float = round_val / 5 + prev_r / 100
@@ -49,10 +49,10 @@ def _infer_wins(prev_r: int, delta: int) -> int:
             # 验证反推是否自洽
             # 有奖励时 wins 应该 >= 10
             if bonus == 5 and w >= 9:
-                return max(10, w)
+                return 10
             elif bonus == 0 and w < 10:
                 return max(0, w)
-        return max(0, round(delta / 5 + prev_r / 100))
+        return min(10, max(0, round(delta / 5 + prev_r / 100)))
     elif delta < 0:
         # 扣分：逆推 2/3 次方（S16+）
         # raw = -abs(delta)^(3/2)
@@ -107,13 +107,14 @@ def parse_history(rh: list[dict], days: int = 5) -> list[dict]:
         base_r  = prev_day_last["rating"] if prev_day_last else pts[0]["rating"]
         day_delta = end_r - base_r
 
-        result.append({
-            "date":      date,
-            "games":     games,
-            "day_delta": day_delta,
-        })
+        if games:  # 跳过无对战记录的天
+            result.append({
+                "date":      date,
+                "games":     games,
+                "day_delta": day_delta,
+            })
 
-    return result
+    return result[-days:]  # 取最近有记录的 N 天
 
 
 def generate_history_chart(username: str, rh: list[dict], colorblind: bool = False) -> str:
@@ -182,7 +183,7 @@ def generate_history_chart(username: str, rh: list[dict], colorblind: bool = Fal
     header_y = total_h - 0.08
     ax.text(0.3,  header_y, "日期",    color=MUTED, fontsize=9, va="top", ha="left")
     ax.text(1.65, header_y, "局数",    color=MUTED, fontsize=9, va="top", ha="center")
-    ax.text(2.5,  header_y, "每局胜场（上：胜场  下：结束时间）",
+    ax.text(2.5,  header_y, "每局对局（胜场 / 分数变化 / 时间）",
             color=MUTED, fontsize=8.5, va="top", ha="left")
     ax.text(11.7, header_y, "当日总分", color=MUTED, fontsize=9, va="top", ha="right")
     ax.axhline(y=total_h - 0.28, color=BORDER, linewidth=0.8, xmin=0.01, xmax=0.99)
@@ -196,8 +197,9 @@ def generate_history_chart(username: str, rh: list[dict], colorblind: bool = Fal
     BOX_H     = 0.90
     MAX_X     = 11.4
 
-    font_wins = max(5.0, min(8.5, BOX_W * 18))
-    font_time = max(4.5, min(7.0,  BOX_W * 14))
+    font_wins  = max(4.5, min(7.5, BOX_W * 16))
+    font_delta = max(4.0, min(7.0, BOX_W * 15))
+    font_time  = max(3.5, min(6.5, BOX_W * 13))
 
     # ── 每行 ──
     for row_idx, day in enumerate(reversed(history)):
@@ -235,13 +237,20 @@ def generate_history_chart(username: str, rh: list[dict], colorblind: bool = Fal
                                   alpha=0.92, zorder=1)
             ax.add_patch(rect)
 
-            top_y = row_y + 0.15 + BOX_H * 0.62
+            top_y = row_y + 0.15 + BOX_H * 0.72
             ax.text(bx + BOX_W / 2, top_y,
                     f"{game['wins']}胜",
                     color=BOX_TEXT, fontsize=font_wins, fontweight="bold",
                     va="center", ha="center", zorder=2)
 
-            bot_y = row_y + 0.15 + BOX_H * 0.25
+            mid_y = row_y + 0.15 + BOX_H * 0.45
+            d_str = (f"+{game['delta']}" if game['delta'] > 0 else str(game['delta']))
+            ax.text(bx + BOX_W / 2, mid_y,
+                    d_str,
+                    color=BOX_TEXT, fontsize=font_delta, fontweight="bold",
+                    va="center", ha="center", zorder=2)
+
+            bot_y = row_y + 0.15 + BOX_H * 0.16
             ax.text(bx + BOX_W / 2, bot_y,
                     game["end_time"],
                     color=BOX_TEXT, fontsize=font_time, alpha=0.85,
