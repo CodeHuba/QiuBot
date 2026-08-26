@@ -1048,8 +1048,13 @@ select option {
 }
 
 /* Footer */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
 footer {
-  margin-top: 60px;
+  margin-top: auto;
   padding: 30px 20px;
   border-top: 1px solid rgba(138, 77, 255, 0.2);
   text-align: center;
@@ -2074,7 +2079,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 </script>
 
-<footer style="margin-top:60px;padding:30px 20px;border-top:1px solid #1f2937;text-align:center;color:#6b7280;font-size:13px">
+<footer style="padding:30px 20px;border-top:1px solid #1f2937;text-align:center;color:#6b7280;font-size:13px">
   <div style="margin-bottom:12px">
     <a href="/static/privacy.html" style="color:#60a5fa;text-decoration:none;margin:0 15px" target="_blank">隐私政策</a>
     <span style="margin:0 5px">|</span>
