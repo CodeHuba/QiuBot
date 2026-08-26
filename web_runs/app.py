@@ -882,9 +882,9 @@ def api_stats_overview():
             'SELECT endpoint, COUNT(*) as cnt, AVG(duration_ms) as avg_ms, SUM(CASE WHEN success=0 THEN 1 ELSE 0 END) as errors FROM api_log WHERE created_at >= ? GROUP BY endpoint ORDER BY cnt DESC', (cutoff,)
         ).fetchall()]
 
-        # 每日 API 调用趋势（按天）
+        # 每日 API 调用趋势（按天，北京时间 UTC+8）
         daily = [{'day': r[0], 'cnt': r[1], 'uv': r[2]} for r in conn.execute(
-            'SELECT DATE(created_at) as day, COUNT(*) as cnt, COUNT(DISTINCT COALESCE(NULLIF(fingerprint,""), ip)) as uv FROM api_log WHERE created_at >= ? GROUP BY day ORDER BY day', (cutoff,)
+            "SELECT DATE(created_at, '+8 hours') as day, COUNT(*) as cnt, COUNT(DISTINCT COALESCE(NULLIF(fingerprint,''), ip)) as uv FROM api_log WHERE created_at >= ? GROUP BY day ORDER BY day", (cutoff,)
         ).fetchall()]
 
         # Feedback 行为统计
