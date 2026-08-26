@@ -452,7 +452,7 @@ def api_winrate():
                     r['tag'] = card
                 results.append(r)
             _log_query('winrate', {'cards': card_list, 'hero': hero_raw, 'days': days, 'rank': rank_filter}, ip, len(results), True)
-            return jsonify(results)
+            return jsonify({'results': results, 'phase': CURRENT_PHASE})
         else:
             cards = [c.strip() for c in cards_raw.split('+') if c.strip()]
             if not cards:
