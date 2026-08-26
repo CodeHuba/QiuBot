@@ -1048,8 +1048,13 @@ select option {
 }
 
 /* Footer */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
 footer {
-  margin-top: 60px;
+  margin-top: auto;
   padding: 30px 20px;
   border-top: 1px solid rgba(138, 77, 255, 0.2);
   text-align: center;
@@ -1477,6 +1482,100 @@ input[type="file"] {
   color: var(--text-secondary);
   margin-bottom: 3px;
 }
+
+/* ── winrate 多选下拉 ── */
+.wr-ms-box {
+  display: flex; align-items: center;
+  min-height: 42px; padding: 5px 10px; gap: 6px;
+  border: 1px solid var(--border-bright); border-radius: 8px;
+  background: var(--bg-surface); cursor: text;
+  transition: border-color .2s, box-shadow .2s;
+}
+.wr-ms-box:focus-within, .wr-ms-box.open {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 0 2px rgba(38,217,242,0.15);
+}
+#wr-ms-inner {
+  display: flex; flex-wrap: wrap; gap: 5px; flex: 1; align-items: center;
+}
+.wr-ms-input {
+  border: none; background: transparent; outline: none;
+  color: var(--text-primary); font-size: 14px;
+  min-width: 80px; flex: 1; padding: 2px 0;
+}
+.wr-ms-input::placeholder { color: var(--text-secondary); }
+.wr-ms-arrow {
+  color: var(--text-secondary); font-size: 11px; flex-shrink: 0;
+  transition: transform .2s; user-select: none;
+}
+.wr-ms-box.open .wr-ms-arrow { transform: rotate(180deg); }
+.wr-ms-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 20px;
+  background: rgba(38,217,242,0.15); border: 1px solid var(--border-bright);
+  color: var(--neon-cyan); font-size: 13px; white-space: nowrap;
+}
+.wr-ms-tag-del {
+  cursor: pointer; opacity: 0.6; font-size: 14px; line-height: 1;
+  transition: opacity .15s, color .15s;
+}
+.wr-ms-tag-del:hover { opacity: 1; color: #ff536a; }
+.wr-ms-dropdown {
+  display: none; position: absolute; left: 0; right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-surface); border: 1px solid var(--border-bright);
+  border-radius: 10px; z-index: 999; overflow-y: auto; max-height: 300px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.wr-ms-dropdown.open { display: block; }
+.wr-ms-empty {
+  padding: 12px 14px; color: var(--text-secondary); font-size: 13px; text-align: center;
+}
+.wr-ms-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; cursor: pointer; transition: background .15s;
+  font-size: 14px; color: var(--text-primary);
+}
+.wr-ms-item:hover, .wr-ms-item.active { background: rgba(38,217,242,0.12); }
+.wr-ms-item.selected { opacity: 0.4; pointer-events: none; }
+.wr-ms-img { display: none; }
+.wr-ms-names { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.wr-ms-name-zh { font-size: 14px; font-weight: 500; }
+.wr-ms-name-en { font-size: 11px; color: var(--text-secondary); }
+
+/* ── 胜率排行榜 ── */
+.wr-rank-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.wr-rank-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 10px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border-dim);
+  transition: border-color .2s;
+}
+.wr-rank-row:hover { border-color: var(--border-bright); }
+.wr-rank-medal { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+.wr-rank-info { flex: 1; min-width: 0; }
+.wr-rank-name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 5px; }
+.wr-rank-bar-wrap { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+.wr-rank-bar { height: 100%; border-radius: 3px; transition: width .5s ease; }
+.wr-rank-right { text-align: right; flex-shrink: 0; }
+.wr-rank-pct { font-size: 20px; font-weight: 700; }
+.wr-rank-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.wr-rank-empty { opacity: 0.5; }
+.wr-rank-nodata { font-size: 13px; color: var(--text-secondary); margin-left: auto; }
+
+/* ── 查询进度条 ── */
+.wr-progress-bar {
+  height: 3px;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-violet), var(--neon-magenta));
+  background-size: 200% 100%;
+  border-radius: 2px;
+  animation: wr-progress-slide 1.2s linear infinite;
+  margin-bottom: 12px;
+}
+@keyframes wr-progress-slide {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
 </style>
 
 </head>
@@ -1510,10 +1609,19 @@ input[type="file"] {
 <div id="panel-winrate" class="panel active">
   <div class="form-card">
     <div class="form-title">📊 10胜率查询</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>卡牌（+分隔多张）</label>
-        <input id="wr-cards" type="text" placeholder="如：火炮阵列+深海弯刀" style="min-width:220px">
+    <div class="form-row" style="flex-wrap:wrap;align-items:flex-end;gap:12px">
+      <div class="form-group" style="flex:1;min-width:280px;position:relative">
+        <label>卡牌对比（最多8张）</label>
+        <div id="wr-multiselect" class="wr-ms-box">
+          <div id="wr-ms-inner">
+            <span id="wr-ms-tags"></span>
+            <input id="wr-ms-input" type="text" placeholder="点击搜索卡牌…" autocomplete="off" class="wr-ms-input">
+          </div>
+          <span class="wr-ms-arrow">&#9660;</span>
+        </div>
+        <div id="wr-ms-dropdown" class="wr-ms-dropdown">
+          <div id="wr-ms-list"></div>
+        </div>
       </div>
       <div class="form-group">
         <label>英雄（可选）</label>
@@ -1548,6 +1656,138 @@ input[type="file"] {
 </div>
 </div>
 <script>
+
+// ── winrate 多选下拉 ──
+let _wrSelected = [];   // [{zh, en}]
+let _wrItems = [];      // 当前候选列表
+let _wrActiveIdx = -1;
+let _wrSearchTimer = null;
+
+function _wrOpen() {
+  document.getElementById('wr-multiselect').classList.add('open');
+  document.getElementById('wr-ms-dropdown').classList.add('open');
+  if (!_wrItems.length) _wrFetchItems('');
+}
+
+function _wrClose() {
+  document.getElementById('wr-multiselect').classList.remove('open');
+  document.getElementById('wr-ms-dropdown').classList.remove('open');
+  document.getElementById('wr-ms-input').value = '';
+  _wrActiveIdx = -1;
+}
+
+function _wrRenderTags() {
+  const box = document.getElementById('wr-ms-tags');
+  box.innerHTML = _wrSelected.map((s, i) =>
+    `<span class="wr-ms-tag">${s.zh
+    }<span class="wr-ms-tag-del" onmousedown="event.preventDefault();_wrRemove(${i})">×</span></span>`
+  ).join('');
+  const inp = document.getElementById('wr-ms-input');
+  inp.placeholder = _wrSelected.length ? '' : '点击搜索卡牌…';
+}
+
+function _wrRemove(i) {
+  _wrSelected.splice(i, 1);
+  _wrRenderTags();
+  _wrRenderList(_wrItems);
+}
+
+function _wrSelect(item) {
+  if (_wrSelected.length >= 8) return;
+  if (_wrSelected.find(s => s.zh === item.zh)) return;
+  _wrSelected.push(item);
+  _wrRenderTags();
+  _wrRenderList(_wrItems);
+  document.getElementById('wr-ms-input').value = '';
+  document.getElementById('wr-ms-input').focus();
+}
+
+function _wrRenderList(items) {
+  _wrItems = items;
+  _wrActiveIdx = -1;
+  const list = document.getElementById('wr-ms-list');
+  if (!items.length) {
+    list.innerHTML = '<div class="wr-ms-empty">无匹配结果</div>';
+    return;
+  }
+  const selectedZh = new Set(_wrSelected.map(s => s.zh));
+  list.innerHTML = items.map((it, i) => {
+    const sel = selectedZh.has(it.zh) ? ' selected' : '';
+    const enPart = (it.en && it.en !== it.zh)
+      ? `<span class="wr-ms-name-en">${it.en}</span>` : '';
+    return `<div class="wr-ms-item${sel}" data-idx="${i}"
+        onmousedown="event.preventDefault();_wrSelect(_wrItems[${i}])">
+      <div class="wr-ms-names">
+        <span class="wr-ms-name-zh">${it.zh}</span>${enPart}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function _wrFetchItems(q) {
+  try {
+    const url = q ? `/api/card_search?q=${encodeURIComponent(q)}` : '/api/card_search?q=a';
+    const res = await fetch(url);
+    const items = await res.json();
+    _wrRenderList(items);
+  } catch(e) {
+    document.getElementById('wr-ms-list').innerHTML = '<div class="wr-ms-empty">搜索失败</div>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const box = document.getElementById('wr-multiselect');
+  const inp = document.getElementById('wr-ms-input');
+  const dd  = document.getElementById('wr-ms-dropdown');
+  if (!box) return;
+
+  // 点击 box 开/关
+  box.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('wr-ms-tag-del')) return;
+    e.preventDefault();
+    if (dd.classList.contains('open')) { _wrClose(); } else { inp.focus(); _wrOpen(); }
+  });
+
+  inp.addEventListener('focus', () => { if (!dd.classList.contains('open')) _wrOpen(); });
+
+  inp.addEventListener('input', () => {
+    clearTimeout(_wrSearchTimer);
+    const q = inp.value.trim();
+    _wrSearchTimer = setTimeout(() => _wrFetchItems(q), 200);
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = document.querySelectorAll('.wr-ms-item:not(.selected)');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _wrActiveIdx = Math.min(_wrActiveIdx + 1, items.length - 1);
+      document.querySelectorAll('.wr-ms-item').forEach(el => el.classList.remove('active'));
+      if (items[_wrActiveIdx]) items[_wrActiveIdx].classList.add('active');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _wrActiveIdx = Math.max(_wrActiveIdx - 1, -1);
+      document.querySelectorAll('.wr-ms-item').forEach(el => el.classList.remove('active'));
+      if (_wrActiveIdx >= 0 && items[_wrActiveIdx]) items[_wrActiveIdx].classList.add('active');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (_wrActiveIdx >= 0 && items[_wrActiveIdx]) {
+        const idx = parseInt(items[_wrActiveIdx].dataset.idx);
+        _wrSelect(_wrItems[idx]);
+      } else if (!dd.classList.contains('open')) {
+        queryWinrate();
+      }
+    } else if (e.key === 'Escape') {
+      _wrClose();
+    } else if (e.key === 'Backspace' && inp.value === '' && _wrSelected.length) {
+      _wrRemove(_wrSelected.length - 1);
+    }
+  });
+
+  // 点击外部关闭
+  document.addEventListener('mousedown', e => {
+    if (!box.contains(e.target) && !dd.contains(e.target)) _wrClose();
+  });
+});
 const HEROES = {凡妮莎:'Vanessa',杜利:'Dooley',马克:'Mak',皮格:'Pygmalien',斯黛拉:'Stelle',朱尔斯:'Jules',卡诺克:'Karnok',双龙:'The Dragons'};
 let lastQuery = 0;
 
@@ -1652,45 +1892,79 @@ async function queryWinrate() {
   const err = checkRate();
   if (err) { showError('wr-error', err); return; }
   showError('wr-error', '');
-  const cards = document.getElementById('wr-cards').value.trim();
   const hero = document.getElementById('wr-hero').value;
   const days = document.getElementById('wr-days').value;
   const rank = document.getElementById('wr-rank').value;
-  if (!cards) { showError('wr-error', '请输入至少一张卡牌'); return; }
-  document.getElementById('wr-result').innerHTML = '<div class="loading">查询中...</div>';
-  const params = new URLSearchParams({cards, rank});
-  if (hero) params.set('hero', hero);
-  if (days) params.set('days', days);
+  if (_wrSelected.length === 0) { showError('wr-error', '请至少添加一张卡牌'); return; }
+  document.getElementById('wr-result').innerHTML = '<div class="wr-progress-bar"></div><div class="loading">查询中...</div>';
   try {
+    const cards = _wrSelected.map(s => s.zh).join(',');
+    const params = new URLSearchParams({cards, rank, multi: '1'});
+    if (hero) params.set('hero', hero);
+    if (days) params.set('days', days);
     const res = await fetch('/api/winrate?' + params);
     const data = await res.json();
     if (data.error) { showError('wr-error', data.error); document.getElementById('wr-result').innerHTML=''; return; }
-    renderWinrate(data);
+    const results = data.map(r => ({tag: r.tag, data: r}));
+    renderWinrateCompare(results, hero, days, rank);
   } catch(e) { showError('wr-error', '请求失败: '+e.message); document.getElementById('wr-result').innerHTML=''; }
 }
 
-function renderWinrate(data) {
-  const {card_names, not_found, total, ten_win, rate} = data;
-  if (total === 0) {
-    document.getElementById('wr-result').innerHTML = '<div class="result-card"><div class="empty">暂无数据</div></div>';
-    return;
-  }
-  const color = winrateColor(rate);
-  const pct = (rate*100).toFixed(1);
-  const title = card_names.join(' + ') || '查询卡牌';
-  let notFoundHtml = not_found && not_found.length ? `<div style="color:#f87171;font-size:12px;margin-top:12px">未识别: ${not_found.join(', ')}</div>` : '';
-  document.getElementById('wr-result').innerHTML = `
-    <div class="winrate-card">
-      <div class="winrate-title">${title} 的10胜率</div>
-      <div class="winrate-big" style="color:${color}">${pct}%</div>
-      <div class="winrate-bar-wrap"><div class="winrate-bar" style="width:${pct}%;background:${color}"></div></div>
-      <div class="winrate-stats">
-        <div class="winrate-stat"><div class="num">${ten_win}</div><div class="lbl">10胜局数</div></div>
-        <div class="winrate-stat"><div class="num">${total}</div><div class="lbl">含该卡总局数</div></div>
+function renderWinrateCompare(results, hero, days, rank) {
+  if (!results.length) return;
+
+  // 单卡时保持原样式，多卡时展示排行榜
+  const medals = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
+
+  // 按胜率排序
+  const sorted = [...results].sort((a,b) => {
+    const ra = a.data.total > 0 ? a.data.rate : -1;
+    const rb = b.data.total > 0 ? b.data.rate : -1;
+    return rb - ra;
+  });
+
+  const filterDesc = [
+    hero ? `英雄: ${hero}` : '',
+    days ? `近${days}天` : '全部时间',
+    rank === 'legendary' ? '传奇段位' : '全段位',
+  ].filter(Boolean).join(' · ');
+
+  let rows = sorted.map((item, i) => {
+    const {data, tag} = item;
+    const name = (data.card_names && data.card_names.length) ? data.card_names.join('+') : tag;
+    if (data.total === 0 || data.error) {
+      return `<div class="wr-rank-row wr-rank-empty">
+        <span class="wr-rank-medal">${medals[i]}</span>
+        <span class="wr-rank-name">${name}</span>
+        <span class="wr-rank-nodata">暂无数据</span>
+      </div>`;
+    }
+    const pct = (data.rate * 100).toFixed(1);
+    const color = winrateColor(data.rate);
+    const barW = Math.min(parseFloat(pct), 100);
+    return `<div class="wr-rank-row">
+      <span class="wr-rank-medal">${medals[i]}</span>
+      <div class="wr-rank-info">
+        <div class="wr-rank-name">${name}</div>
+        <div class="wr-rank-bar-wrap"><div class="wr-rank-bar" style="width:${barW}%;background:${color}"></div></div>
       </div>
-      ${notFoundHtml}
+      <div class="wr-rank-right">
+        <div class="wr-rank-pct" style="color:${color}">${pct}%</div>
+        <div class="wr-rank-sub">${data.ten_win}/${data.total} 局</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('wr-result').innerHTML = `
+    <div class="result-card">
+      <div class="result-header">
+        <span>10胜率对比</span>
+        <span class="total">${filterDesc}</span>
+      </div>
+      <div class="wr-rank-list">${rows}</div>
     </div>`;
 }
+
 
 async function queryPartner() {
   const err = checkRate();
@@ -2089,7 +2363,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 </script>
 
-<footer style="margin-top:60px;padding:30px 20px;border-top:1px solid #1f2937;text-align:center;color:#6b7280;font-size:13px">
+<footer style="padding:30px 20px;border-top:1px solid #1f2937;text-align:center;color:#6b7280;font-size:13px">
   <div style="margin-bottom:12px">
     <a href="/static/privacy.html" style="color:#60a5fa;text-decoration:none;margin:0 15px" target="_blank">隐私政策</a>
     <span style="margin:0 5px">|</span>

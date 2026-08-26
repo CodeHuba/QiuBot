@@ -36,6 +36,107 @@ def _mask_ip(ip):
 
 app = Flask(__name__, static_folder='static')
 
+# ── card search 全局索引（启动时预热）──
+_card_search_index = []
+
+def _build_card_search_index():
+    global _card_search_index
+    try:
+        import sys as _sys2
+        _sys2.path.insert(0, '/opt/qiubot')
+        from plugins.bazaar_plugin.runs_query import RunsQuery
+        rq = RunsQuery()
+        rq.load()
+        seen = set()
+        items = []
+        for card_id, info in rq.card_mapping.items():
+            if info.get('type', '') == 'other':
+                continue
+            en_orig = info.get('name', '')
+            if not en_orig or en_orig in seen:
+                continue
+            seen.add(en_orig)
+            zh_name = rq.en_to_zh.get(en_orig, '')
+            if not zh_name:
+                continue
+            items.append({'zh': zh_name, 'en': en_orig})
+        _card_search_index = items
+        print(f'[card_search] 索引构建完成，共 {len(items)} 张卡牌', flush=True)
+    except Exception as e:
+        print(f'[card_search] 索引构建失败: {e}', flush=True)
+
+import threading as _threading
+_threading.Thread(target=_build_card_search_index, daemon=True).start()
+
+# ── Redis winrate 缓存 ──
+import redis as _redis
+import pickle as _pickle
+
+_redis_client = _redis.Redis(host='localhost', port=6379, db=0)
+_WINRATE_CACHE_KEY = f'winrate_cache:{RUNS_SEASON_ID}:{CURRENT_PHASE}'
+_winrate_cache_ready = False
+
+def _build_winrate_cache():
+    """启动时把当前赛段所有 runs 的 (frozenset(card_ids), stat_wins) 存入 Redis list。"""
+    global _winrate_cache_ready
+    try:
+        import sqlite3 as _sl3, json as _j3
+        # 已有缓存则跳过重建（进程重启不需要重建）
+        existing = _redis_client.llen(_WINRATE_CACHE_KEY)
+        if existing > 1000:
+            _winrate_cache_ready = True
+            print(f'[winrate_cache] 复用已有缓存，共 {existing} 条', flush=True)
+            return
+        conn = _sl3.connect('/opt/qiubot/data/bazaar_runs.db', check_same_thread=False)
+        rows = conn.execute(
+            'SELECT items_json, stat_wins FROM runs WHERE season=? AND phase=?',
+            (RUNS_SEASON_ID, CURRENT_PHASE)
+        ).fetchall()
+        conn.close()
+        pipe = _redis_client.pipeline(transaction=False)
+        _redis_client.delete(_WINRATE_CACHE_KEY)
+        for items_json, stat_wins in rows:
+            try:
+                items = _j3.loads(items_json)
+                card_ids = frozenset(item['cardId'] for item in items if 'cardId' in item)
+                pipe.rpush(_WINRATE_CACHE_KEY, _pickle.dumps((card_ids, int(stat_wins or 0))))
+            except Exception:
+                pass
+        pipe.execute()
+        _winrate_cache_ready = True
+        print(f'[winrate_cache] 构建完成，共 {len(rows)} 条', flush=True)
+    except Exception as e:
+        print(f'[winrate_cache] 构建失败: {e}', flush=True)
+
+def _winrate_cache_append(items_json: str, stat_wins: int):
+    """ingest 新 run 后增量追加到缓存。"""
+    try:
+        import json as _j4
+        items = _j4.loads(items_json)
+        card_ids = frozenset(item['cardId'] for item in items if 'cardId' in item)
+        _redis_client.rpush(_WINRATE_CACHE_KEY, _pickle.dumps((card_ids, int(stat_wins or 0))))
+    except Exception:
+        pass
+
+def _winrate_from_cache(card_ids_sets: list, min_wins: int = 10) -> tuple:
+    """从 Redis 缓存计算胜率，返回 (total, ten_win)。"""
+    total = ten_win = 0
+    raw_list = _redis_client.lrange(_WINRATE_CACHE_KEY, 0, -1)
+    for raw in raw_list:
+        try:
+            card_ids, wins = _pickle.loads(raw)
+            if all(card_ids & s for s in card_ids_sets):
+                total += 1
+                if wins >= min_wins:
+                    ten_win += 1
+        except Exception:
+            pass
+    return total, ten_win
+
+_threading.Thread(target=_build_winrate_cache, daemon=True).start()
+
+
+
 # 在 app.py 开头（imports 后）添加统一埋点中间件和 stats 表
 
 import time
@@ -260,8 +361,8 @@ def rate_limit(f):
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         now = time.time()
         last = _rate_limit.get(ip, 0)
-        if now - last < 3:
-            return jsonify({'error': '查询太频繁，请3秒后再试'}), 429
+        if now - last < 1:
+            return jsonify({'error': '查询太频繁，请稍后再试'}), 429
         _rate_limit[ip] = now
         return f(*args, **kwargs)
     return wrapper
@@ -303,22 +404,62 @@ def api_runs():
 @rate_limit
 def api_winrate():
     cards_raw = request.args.get('cards', '').strip()
-    cards = [c.strip() for c in cards_raw.split('+') if c.strip()]
     hero_raw = request.args.get('hero', '').strip() or None
     days = request.args.get('days', type=int)
     rank_filter = request.args.get('rank', 'all')
+    # multi=1 时 cards 为逗号分隔的多张卡，返回数组
+    multi = request.args.get('multi', '0') == '1'
 
-    if not cards:
+    if not cards_raw:
         return jsonify({'error': '请指定至少一张卡牌'}), 400
 
     try:
         client = RunsQuery()
         client.load()
         hero = client.resolve_hero(hero_raw) if hero_raw else None
-        result = client.winrate(cards=cards, hero=hero, days=days, rank_filter=rank_filter)
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
-        _log_query('winrate', {'cards': cards, 'hero': hero_raw, 'days': days, 'rank': rank_filter}, ip, result.get('total', 0), True)
-        return jsonify(result)
+
+        # 走 Redis 缓存的条件：无 days/hero/rank 过滤，且缓存已就绪
+        use_cache = (_winrate_cache_ready and not days and not hero and rank_filter == 'all')
+
+        if multi:
+            card_list = [c.strip() for c in cards_raw.split(',') if c.strip()]
+            results = []
+            for card in card_list:
+                cards = [c.strip() for c in card.split('+') if c.strip()]
+                if use_cache:
+                    card_ids_sets = []
+                    not_found = []
+                    card_names = []
+                    for cn in cards:
+                        ids = client.find_card_ids(cn)
+                        if not ids:
+                            not_found.append(cn)
+                        else:
+                            card_ids_sets.append(set(ids))
+                            en = client.translate_name(cn)
+                            zh = client.get_zh_name(en)
+                            card_names.append(zh if zh != en else cn)
+                    if card_ids_sets:
+                        total, ten_win = _winrate_from_cache(card_ids_sets)
+                    else:
+                        total, ten_win = 0, 0
+                    rate = ten_win / total if total > 0 else 0.0
+                    r = {'total': total, 'ten_win': ten_win, 'rate': rate,
+                         'card_names': card_names, 'not_found': not_found, 'tag': card}
+                else:
+                    r = client.winrate(cards=cards, hero=hero, days=days, rank_filter=rank_filter)
+                    r['tag'] = card
+                results.append(r)
+            _log_query('winrate', {'cards': card_list, 'hero': hero_raw, 'days': days, 'rank': rank_filter}, ip, len(results), True)
+            return jsonify(results)
+        else:
+            cards = [c.strip() for c in cards_raw.split('+') if c.strip()]
+            if not cards:
+                return jsonify({'error': '请指定至少一张卡牌'}), 400
+            result = client.winrate(cards=cards, hero=hero, days=days, rank_filter=rank_filter)
+            _log_query('winrate', {'cards': cards, 'hero': hero_raw, 'days': days, 'rank': rank_filter}, ip, result.get('total', 0), True)
+            return jsonify(result)
     except Exception as e:
         ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip())
         _log_query('winrate', {'cards': cards_raw, 'hero': hero_raw, 'days': days}, ip, 0, False)
@@ -370,6 +511,37 @@ def api_heroes():
     return jsonify(standard)
 
 
+
+
+
+@app.route('/api/card_search')
+def api_card_search():
+    """模糊搜索卡牌名，从预热索引查询，返回中英文名。"""
+    q = request.args.get('q', '').strip()
+    if not q or len(q) > 40:
+        return jsonify([])
+    try:
+        q_lower = q.lower().replace(' ', '')
+        results = []
+        for item in _card_search_index:
+            zh_norm = item['zh'].replace(' ', '')
+            en_norm = item['en'].lower().replace(' ', '')
+            if q_lower in zh_norm or q_lower in en_norm:
+                results.append(item)
+            if len(results) >= 20:
+                break
+
+        def sort_key(r):
+            zh_n = r['zh'].replace(' ', '')
+            en_n = r['en'].lower().replace(' ', '')
+            zh_prefix = zh_n.startswith(q_lower) or r['zh'].startswith(q)
+            en_prefix = en_n.startswith(q_lower)
+            return (0 if zh_prefix else (1 if en_prefix else 2), r['zh'])
+
+        results.sort(key=sort_key)
+        return jsonify(results[:10])
+    except Exception as e:
+        return jsonify([])
 
 
 @app.route('/api/suggestions')
@@ -445,14 +617,21 @@ def api_ingest():
             if wins < 1:
                 continue
             try:
+                _items_json = __import__('json').dumps(run.get('items', []), ensure_ascii=False)
+                try:
+                    _card_ids_text = ' '.join(
+                        it['cardId'] for it in run.get('items', []) if 'cardId' in it
+                    )
+                except Exception:
+                    _card_ids_text = ''
                 conn.execute("""INSERT OR IGNORE INTO runs
                     (id, hero, username, created_at, items_json, skills_json, combats_json,
                      stat_wins, stat_losses, player_rating, player_rating_after,
-                     player_rank, player_rank_after, screenshot_url, raw_json, collected_at, season, phase)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     player_rank, player_rank_after, screenshot_url, raw_json, collected_at, season, phase, card_ids_text)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (run['id'], run.get('hero'), run.get('username'),
                      run.get('createdAt'),
-                     __import__('json').dumps(run.get('items', []), ensure_ascii=False),
+                     _items_json,
                      __import__('json').dumps(run.get('skills', []), ensure_ascii=False),
                      __import__('json').dumps(run.get('combats', []), ensure_ascii=False),
                      run.get('statWins'), run.get('statLosses'),
@@ -460,9 +639,15 @@ def api_ingest():
                      run.get('playerRank'), run.get('playerRankAfter'),
                      run.get('screenshotUrl'),
                      __import__('json').dumps(run, ensure_ascii=False),
-                     __import__('datetime').datetime.now().isoformat(), RUNS_SEASON_ID, CURRENT_PHASE))
+                     __import__('datetime').datetime.now().isoformat(), RUNS_SEASON_ID, CURRENT_PHASE,
+                     _card_ids_text))
                 if conn.total_changes > 0:
                     new_count += 1
+                    # 增量追加到 Redis winrate 缓存
+                    _winrate_cache_append(
+                        __import__('json').dumps(run.get('items', []), ensure_ascii=False),
+                        run.get('statWins', 0)
+                    )
                     # 新 run 加入 OCR 队列识别游戏用户名
                     # enqueue_run(run['id'], run.get('screenshotUrl', ''))  # 已改为凌晨批量处理
             except Exception as e:

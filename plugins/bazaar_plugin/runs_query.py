@@ -374,8 +374,9 @@ class RunsQuery:
             return {'total': 0, 'ten_win': 0, 'rate': 0.0,
                     'card_names': card_names, 'not_found': not_found}
 
-        # 拉取所有 runs（按条件过滤英雄/时间/阶段）
-        sql = "SELECT items_json, stat_wins FROM runs WHERE season=?"
+        # SQL 层用有索引的字段（hero/rank/days/phase）缩小结果集
+        # 再用 card_ids_text 在 Python 层做精确过滤，避免全量 json.loads
+        sql = "SELECT card_ids_text, stat_wins FROM runs WHERE season=?"
         params = [RUNS_SEASON_ID]
         if not all_phases:
             sql += " AND phase=?"
@@ -391,19 +392,25 @@ class RunsQuery:
             sql += " AND player_rank='Legendary'"
         rows = self.conn.execute(sql, params).fetchall()
 
+        # 每组 cardId set 取代表 id 列表，用 str.find 在 card_ids_text 快速判断
+        rep_ids = [next(iter(s)) for s in card_ids_sets]
+
         total = 0
         ten_win = 0
-        for items_json, wins in rows:
-            try:
-                items = _json.loads(items_json)
-                run_card_ids = {item['cardId'] for item in items if 'cardId' in item}
-            except Exception:
+        for card_ids_text, wins in rows:
+            if not card_ids_text:
                 continue
-            # 检查是否包含所有指定卡牌组合（每组卡牌取交集）
-            if all(run_card_ids & id_set for id_set in card_ids_sets):
-                total += 1
-                if (wins or 0) >= min_wins_threshold:
-                    ten_win += 1
+            # 先用代表 id 快速过滤（UUID 唯一，误判率极低）
+            if not all(rep in card_ids_text for rep in rep_ids):
+                continue
+            # 有多 id 的卡才做精确集合校验
+            if any(len(s) > 1 for s in card_ids_sets):
+                run_ids = set(card_ids_text.split())
+                if not all(run_ids & s for s in card_ids_sets):
+                    continue
+            total += 1
+            if (wins or 0) >= min_wins_threshold:
+                ten_win += 1
 
         rate = ten_win / total if total > 0 else 0.0
         return {
