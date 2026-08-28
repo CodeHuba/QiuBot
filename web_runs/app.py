@@ -906,7 +906,9 @@ def api_stats_overview():
         # json_extract('$.cards') 取成 NULL，聚合出一条计数最高的空分组，显示为 "-"
         old_conn = _sl.connect('/opt/qiubot/data/query_stats.db')
         hot_cards = [{'cards': r[0], 'cnt': r[1]} for r in old_conn.execute(
-            """SELECT COALESCE(json_extract(params_json,'$.cards'), json_extract(params_json,'$.card')) as cards, COUNT(*) as cnt
+            """SELECT TRIM(REPLACE(REPLACE(REPLACE(
+                 COALESCE(json_extract(params_json,'$.cards'), json_extract(params_json,'$.card')),
+               '[',''), ']',''), '"','')) as cards, COUNT(*) as cnt
                FROM query_log WHERE created_at >= ? AND query_type IN ('winrate','partner') AND success=1
                AND cards IS NOT NULL
                GROUP BY cards ORDER BY cnt DESC LIMIT 10""", (cutoff,)
