@@ -121,12 +121,22 @@ def search_zh(query: str, limit: int = 10) -> list[str]:
     q = query.strip()
     if not q:
         return []
+    # 完全匹配
     exact = _comm_zh_to_en.get(q)
     if exact:
         return [exact]
+    # 去空格规范化匹配（如"炫光LED" 匹配 "炫光 LED"）
+    q_nospace = q.replace(" ", "")
+    exact_nospace = next(
+        (en for zh, en in _comm_zh_to_en.items() if zh.replace(" ", "") == q_nospace),
+        None,
+    )
+    if exact_nospace:
+        return [exact_nospace]
+    # 子串匹配（同样去空格）
     results = []
     for zh, en in _comm_zh_to_en.items():
-        if q in zh:
+        if q_nospace in zh.replace(" ", ""):
             results.append((len(zh), en))
     results.sort()
     return [en for _, en in results[:limit]]
