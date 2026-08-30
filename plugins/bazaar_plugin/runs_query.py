@@ -652,8 +652,10 @@ class RunsQuery:
              min_count: int = 50,
              min_config_count: int = 5,
              all_phases: bool = False,
-             rank_filter: str = "all") -> dict:
-        """四层嵌套阵容榜 L1(2张)→L2(3张)→L3(4张)→具体配置"""
+             rank_filter: str = "all",
+             required_card: str = None) -> dict:
+        """四层嵌套阵容榜 L1(2张)→L2(3张)→L3(4张)→具体配置
+        required_card: 若指定，只统计包含该 cardId 的 runs"""
         import json as _json
         import time
         from collections import defaultdict
@@ -667,7 +669,7 @@ class RunsQuery:
         TOP_CFG = 3
 
         global _comp_cache, _comp_cache_ttl
-        cache_key = (hero, 'v3', all_phases, CURRENT_PHASE if not all_phases else None, rank_filter)
+        cache_key = (hero, 'v3', all_phases, CURRENT_PHASE if not all_phases else None, rank_filter, required_card)
         if cache_key in _comp_cache:
             cached, exp = _comp_cache[cache_key]
             if time.time() < exp:
@@ -696,6 +698,9 @@ class RunsQuery:
                 if len(card_ids) < 2:
                     continue
                 deck_set = frozenset(card_ids)
+                # 阵容查询：过滤掉不包含 required_card 的 runs
+                if required_card and required_card not in deck_set:
+                    continue
                 is_win = int(stat_wins or 0) >= 10
                 s = deck_stats[deck_set]
                 s['count'] += 1
@@ -793,11 +798,13 @@ class RunsQuery:
                 'is_new': is_new,
             }
 
-        # L1 去重（严格零重叠）
+        # L1 去重（严格零重叠，required_card 豁免重叠判断）
+        _rc_set = {required_card} if required_card else set()
         cands_l1.sort(key=lambda x: -deck_count(x))
         l1_final = []
         for c in cands_l1:
-            if not any(len(c & ex) > 0 for ex in l1_final):
+            c_cmp = c - _rc_set
+            if not any(len(c_cmp & (ex - _rc_set)) > 0 for ex in l1_final):
                 l1_final.append(c)
 
         # 计算L1 stats（使用降级后的支持度）
@@ -836,8 +843,8 @@ class RunsQuery:
             cands.sort(key=lambda x: -sum(deck_stats[ds]['count'] for ds in parent_pool if x <= ds))
             result = []
             for c in cands:
-                flex_c = c - parent_skel
-                if not any(jaccard(flex_c, ex - parent_skel) >= L2_OVERLAP for ex in result):
+                flex_c = (c - parent_skel) - _rc_set
+                if not any(jaccard(flex_c, (ex - parent_skel) - _rc_set) >= L2_OVERLAP for ex in result):
                     result.append(c)
             return result
 

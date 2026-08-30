@@ -1482,6 +1482,39 @@ input[type="file"] {
   color: var(--text-secondary);
   margin-bottom: 3px;
 }
+
+.variant-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.variant-label{font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
+.variant-stats{display:flex;gap:14px;align-items:center;}
+.variant-rate{font-size:14px;font-weight:800;}
+.variant-count{font-size:12px;color:var(--text-secondary);}
+/* ===== 阵容分析视图 ===== */
+.view-toggle{display:flex;gap:0;border:1px solid rgba(138,77,255,.35);border-radius:6px;overflow:hidden;margin-bottom:16px;}
+.view-toggle-btn{flex:1;padding:7px 0;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text-secondary);transition:all .2s;}
+.view-toggle-btn.active{background:rgba(138,77,255,.25);color:var(--text-primary);}
+.comp-group{background:rgba(23,16,71,.7);border:1px solid rgba(138,77,255,.3);border-radius:8px;margin-bottom:14px;overflow:hidden;transition:all .2s;position:relative;}
+.comp-group::before{content:'';position:absolute;top:-1px;right:-1px;width:12px;height:12px;background:var(--neon-violet,#8a4dff);clip-path:polygon(100% 0,0 0,100% 100%);border-radius:0 8px 0 0;}
+.comp-group:hover{border-color:rgba(138,77,255,.55);box-shadow:0 0 16px rgba(138,77,255,.2);}
+.comp-group-header{padding:14px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;user-select:none;background:rgba(9,10,42,.35);}
+.comp-card-chip{padding:3px 9px;border-radius:4px;font-size:12px;font-weight:600;background:rgba(138,77,255,.12);color:var(--text-primary);border:1px solid rgba(138,77,255,.3);white-space:nowrap;}
+.comp-card-chip.has-img{padding:3px 6px;display:flex;align-items:center;gap:4px;}
+.comp-card-chip.is-new{background:rgba(244,56,184,0.25);border-color:rgba(244,56,184,0.8);color:#F438B8;font-weight:700;box-shadow:0 0 6px rgba(244,56,184,0.4);}
+.comp-card-img{object-fit:cover;border-radius:3px;flex-shrink:0;display:block;}
+.comp-card-img.size-Small{width:16px;height:32px;}
+.comp-card-img.size-Medium{width:32px;height:32px;}
+.comp-card-img.size-Large{width:48px;height:32px;}
+.comp-expand-icon{font-size:13px;color:var(--text-secondary);transition:transform .3s;flex-shrink:0;}
+.comp-group.expanded>.comp-group-header .comp-expand-icon{transform:rotate(180deg);}
+.comp-variants{display:none;padding:14px 20px;border-top:1px solid rgba(138,77,255,.15);}
+.comp-group.expanded>.comp-variants{display:block;}
+.comp-variant-item{padding:12px;background:rgba(9,10,42,.5);border-radius:6px;margin-bottom:10px;border:1px solid rgba(138,77,255,.2);}
+.comp-variant-item:last-child{margin-bottom:0;}
+.comp-rep-cards{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.comp-stats{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.comp-rate{font-size:16px;font-weight:700;}
+.comp-count{font-size:11px;color:var(--text-secondary);}
+.comp-rank{font-size:20px;flex-shrink:0;width:28px;text-align:center;}
+.comp-hero-badge{font-size:11px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.08);color:var(--text-secondary);border:1px solid rgba(255,255,255,.12);flex-shrink:0;}
 </style>
 
 </head>
@@ -1559,12 +1592,22 @@ input[type="file"] {
     </div>
   </div>
   <div id="runs-error"></div>
+  <div class="view-toggle" id="view-toggle">
+    <button class="view-toggle-btn" onclick="setViewMode('comp')">🔍 阵容分析</button>
+    <button class="view-toggle-btn active" onclick="setViewMode('list')">📋 阵容列表</button>
+  </div>
   <div id="runs-result"></div>
+  <div id="comp-result"></div>
 </div>
 </div>
 <script>
 const HEROES = {凡妮莎:'Vanessa',杜利:'Dooley',马克:'Mak',皮格:'Pygmalien',斯黛拉:'Stelle',朱尔斯:'Jules',卡诺克:'Karnok',双龙:'The Dragons'};
 let lastQuery = 0;
+// 初始化视图状态
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('comp-result').style.display = 'none';
+  document.getElementById('comp-result').innerHTML = '<div class="result-card"><div class="empty">输入卡牌名称后点击查询，即可查看阵容分析</div></div>';
+});
 
 function switchTab(tab) {
   if (tab === "topcard" && !window._topcardLoaded) { setTimeout(loadTopcard, 0); }
@@ -1606,6 +1649,15 @@ async function queryRuns(page) {
   const wins = document.getElementById('runs-wins').value;
   const days = document.getElementById('runs-days').value;
   const rank = document.getElementById('runs-rank').value;
+  // 阵容分析模式
+  if (_viewMode === 'comp') {
+    document.getElementById('runs-result').style.display = 'none';
+    document.getElementById('comp-result').style.display = '';
+    await queryComp();
+    return;
+  }
+  document.getElementById('runs-result').style.display = '';
+  document.getElementById('comp-result').style.display = 'none';
   document.getElementById('runs-result').innerHTML = '<div class="loading">查询中...</div>';
   const params = new URLSearchParams({min_wins: wins, page, rank});
   if (hero) params.set('hero', hero);
@@ -2102,6 +2154,187 @@ function trackPV(tab) {
 window.addEventListener('DOMContentLoaded', () => {
   trackPV('runs');
 });
+
+
+// ===== 阵容分析视图 =====
+let _viewMode = 'list'; // 'comp' | 'list'
+
+function toggleScreenshotComp(id) {
+  const el = document.getElementById(id);
+  const icon = document.getElementById(id + '-icon');
+  if (!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : 'block';
+  if (icon) icon.textContent = visible ? '▼' : '▲';
+}
+
+function setViewMode(mode) {
+  _viewMode = mode;
+  document.querySelectorAll('.view-toggle-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', (i === 0 && mode === 'comp') || (i === 1 && mode === 'list'));
+  });
+  document.getElementById('runs-result').style.display = mode === 'list' ? '' : 'none';
+  document.getElementById('comp-result').style.display = mode === 'comp' ? '' : 'none';
+}
+
+function rateColorComp(r) {
+  if (r >= 0.7) return '#10b981';
+  if (r >= 0.5) return '#f59e0b';
+  return '#ef4444';
+}
+
+const HERO_ZH_COMP = {Vanessa:'凡妮莎',Dooley:'杜利',Mak:'马克',Pygmalien:'皮格',Stelle:'斯黛拉',Jules:'朱尔斯',Karnok:'卡诺克','The Dragons':'双龙'};
+
+async function queryComp() {
+  const card = document.getElementById('runs-cards').value.trim().split('+')[0].trim();
+  const hero = document.getElementById('runs-hero').value;
+  const rank = document.getElementById('runs-rank').value;
+  if (!card) {
+    document.getElementById('comp-result').innerHTML = '<div class="result-card"><div class="empty">请输入卡牌名称后查询阵容分析</div></div>';
+    return;
+  }
+  document.getElementById('comp-result').innerHTML = '<div class="loading">分析中...</div>';
+  const params = new URLSearchParams({card, rank});
+  if (hero) params.set('hero', hero);
+  try {
+    const res = await fetch('/api/comp/card?' + params);
+    const data = await res.json();
+    if (data.error) { document.getElementById('comp-result').innerHTML = `<div class="error-msg">${data.error}</div>`; return; }
+    renderCompCard(data);
+  } catch(e) {
+    document.getElementById('comp-result').innerHTML = `<div class="error-msg">请求失败: ${e.message}</div>`;
+  }
+}
+
+function renderCompCard(data) {
+  const layers = data.layers || [];
+  const medals = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
+
+  function screenshotBtnComp(id, url) {
+    if (!url) return '';
+    const fullUrl = url.startsWith('http') ? url : 'https://usercontent.bzdb.network' + url;
+    return `<div style="margin-top:8px">
+      <button onclick="toggleScreenshotComp('${id}')" style="background:none;border:1px solid rgba(38,217,242,0.3);border-radius:4px;color:var(--text-secondary);font-size:11px;padding:3px 10px;cursor:pointer;font-family:inherit;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--neon-cyan)';this.style.color='var(--neon-cyan)'" onmouseout="this.style.borderColor='rgba(38,217,242,0.3)';this.style.color='var(--text-secondary)'">
+        📷 查看截图 <span id="${id}-icon">▼</span>
+      </button>
+      <div id="${id}" style="display:none;margin-top:8px">
+        <img src="${fullUrl}" style="max-width:100%;border-radius:6px;border:1px solid rgba(138,77,255,0.3)" loading="lazy" onerror="this.parentElement.style.display='none'">
+      </div>
+    </div>`;
+  }
+
+  function chips(cards) {
+    return (cards||[]).map(c => {
+      const sizeCls = 'size-' + (c.size || 'Small');
+      if (c.img) {
+        const cls = c.is_new ? 'comp-card-chip has-img is-new' : 'comp-card-chip has-img';
+        return `<span class="${cls}"><img class="comp-card-img ${sizeCls}" src="${c.img}" alt="${c.name_zh}" loading="lazy" onerror="this.style.display='none'">${c.name_zh}</span>`;
+      }
+      return `<span class="${c.is_new ? 'comp-card-chip is-new' : 'comp-card-chip'}">${c.name_zh}</span>`;
+    }).join('');
+  }
+
+  function renderConfigs(configs, prefix) {
+    if (!configs || !configs.length) return '<div style="font-size:12px;color:var(--text-secondary);padding:8px 0">暂无具体配置数据</div>';
+    return configs.map((cfg, k) => {
+      const id = `${prefix}-cfg-${k}`;
+      const cardHtml = chips(cfg.cards);
+      return `<div class="comp-variant-item">
+        <div class="variant-header">
+          <span class="variant-label">配置 ${k+1}</span>
+          <div class="variant-stats">
+            <span class="variant-rate" style="color:${rateColorComp(cfg.rate)}">${(cfg.rate*100).toFixed(1)}% 胜率</span>
+            <span class="variant-count">${cfg.count}次出场</span>
+          </div>
+        </div>
+        <div class="comp-rep-cards" style="margin-top:6px;flex-wrap:wrap">${cardHtml}</div>
+        ${screenshotBtnComp(id, cfg.screenshot)}
+      </div>`;
+    }).join('');
+  }
+
+  function renderL3(l3list, prefix) {
+    if (!l3list || !l3list.length) return '';
+    return l3list.map((l3, k) => {
+      const id = `${prefix}-l3-${k}`;
+      const cfgHtml = renderConfigs(l3.configs, id);
+      return `<div class="comp-group" id="${id}" style="margin:8px 0;border-color:rgba(38,217,242,0.25)">
+        <div class="comp-group-header" onclick="document.getElementById('${id}').classList.toggle('expanded')" style="background:rgba(9,10,42,0.5);padding:10px 16px">
+          <span style="font-size:12px;color:var(--text-secondary);flex-shrink:0">L3</span>
+          <div class="comp-rep-cards" style="flex:1">${chips(l3.core_cards)}</div>
+          <div class="comp-stats">
+            <div>
+              <div class="comp-rate" style="color:${rateColorComp(l3.rate)};font-size:14px">${(l3.rate*100).toFixed(1)}%</div>
+              <div class="comp-count">${l3.count}次</div>
+            </div>
+            <span class="comp-expand-icon">▼</span>
+          </div>
+        </div>
+        <div class="comp-variants" style="padding:12px 16px;background:rgba(0,0,0,0.2)">${cfgHtml}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderL2(l2list, prefix) {
+    if (!l2list || !l2list.length) return '<div style="font-size:12px;color:var(--text-secondary);padding:8px">暂无变种数据</div>';
+    return l2list.map((l2, j) => {
+      const id = `${prefix}-l2-${j}`;
+      const l3Html = renderL3(l2.l3_variants, id);
+      const l2InnerHtml = l3Html || renderConfigs(l2.configs, id);
+      return `<div class="comp-group" id="${id}" style="margin:8px 0;border-color:rgba(244,56,184,0.25)">
+        <div class="comp-group-header" onclick="document.getElementById('${id}').classList.toggle('expanded')" style="background:rgba(9,10,42,0.45);padding:10px 16px">
+          <span style="font-size:12px;color:var(--text-secondary);flex-shrink:0">L2</span>
+          <div class="comp-rep-cards" style="flex:1">${chips(l2.core_cards)}</div>
+          <div class="comp-stats">
+            <div>
+              <div class="comp-rate" style="color:${rateColorComp(l2.rate)};font-size:14px">${(l2.rate*100).toFixed(1)}%</div>
+              <div class="comp-count">${l2.count}次</div>
+            </div>
+            <span class="comp-expand-icon">▼</span>
+          </div>
+        </div>
+        <div class="comp-variants" style="padding:12px 16px">${l2InnerHtml || '<div style="font-size:12px;color:var(--text-secondary)">暂无数据</div>'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (!layers.length) {
+    document.getElementById('comp-result').innerHTML = '<div class="result-card"><div class="empty">数据不足，无法生成阵容分析（至少需要10局含该卡的记录）</div></div>';
+    return;
+  }
+
+  const html = layers.map((l1, i) => {
+    const id = `card-comp-l1-${i}`;
+    const l2Html = renderL2(l1.l2_variants, id);
+    const heroName = l1.hero ? `<span class="comp-hero-badge">${HERO_ZH_COMP[l1.hero] || l1.hero}</span>` : '';
+    return `<div class="comp-group" id="${id}">
+      <div class="comp-group-header" onclick="document.getElementById('${id}').classList.toggle('expanded')">
+        <span class="comp-rank">${medals[i] || i+1}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="font-size:11px;color:var(--text-secondary)">L1 体系</span>
+            ${heroName}
+          </div>
+          <div class="comp-rep-cards">${chips(l1.core_cards)}</div>
+        </div>
+        <div class="comp-stats">
+          <div>
+            <div class="comp-rate" style="color:${rateColorComp(l1.rate)}">${(l1.rate*100).toFixed(1)}%</div>
+            <div class="comp-count">评分${(l1.score*100).toFixed(0)} · ${l1.count}次</div>
+          </div>
+          <span class="comp-expand-icon">▼</span>
+        </div>
+      </div>
+      <div class="comp-variants">${l2Html}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('comp-result').innerHTML = `
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text-secondary)">
+      「${data.card}」相关阵容 · 共 ${data.total_runs} 局样本 · 综合评分排序
+    </div>
+    ${html}`;
+}
 
 </script>
 

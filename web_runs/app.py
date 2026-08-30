@@ -709,6 +709,78 @@ def api_comp():
         _log_query('comp', {'hero': hero_raw}, ip, 0, False)
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/comp/card', methods=['GET'])
+@rate_limit
+def api_comp_card():
+    from plugins.bazaar_plugin.runs_query import RunsQuery, HERO_ZH_TO_EN
+    card_raw = request.args.get('card', '').strip()
+    hero_raw = request.args.get('hero', '').strip()
+    all_phases = request.args.get('all_phases') == 'true'
+    rank_filter = request.args.get('rank', 'all')
+    ip = _mask_ip(request.headers.get('X-Forwarded-For', request.remote_addr))
+    if not card_raw:
+        return jsonify({'error': '请指定卡牌名'}), 400
+    try:
+        query = RunsQuery()
+        # 从 card_images.json 查 cardId（支持中英文、去空格精确匹配）
+        import json as _json
+        _ci = _json.load(open('/opt/qiubot/plugins/bazaar_plugin/cache/card_images.json', encoding='utf-8'))
+        _cards = _ci.get('cards', {})
+        _name_to_ids = {}
+        _zh_to_ids = {}
+        for _cid, _info in _cards.items():
+            _en = _info.get('internalName', '')
+            _zh = _info.get('name', '')
+            if _en:
+                _name_to_ids.setdefault(_en.lower().replace(' ', ''), []).append(_cid)
+            if _zh and _zh != _en:
+                _zh_to_ids.setdefault(_zh.lower().replace(' ', ''), []).append(_cid)
+        _q = card_raw.lower().replace(' ', '')
+        _found = _zh_to_ids.get(_q) or _name_to_ids.get(_q) or []
+        if not _found:
+            return jsonify({'error': f'未找到卡牌: {card_raw}'}), 404
+        required_card = _found[0]
+        card_display = _cards.get(required_card, {}).get('name') or card_raw
+        # 解析职业（可选）
+        hero = None
+        if hero_raw:
+            hero = query.resolve_hero(hero_raw)
+            if not hero:
+                return jsonify({'error': f'未知职业: {hero_raw}'}), 400
+        # 全职业时遍历所有职业合并结果
+        HEROES = ['Vanessa', 'Dooley', 'Mak', 'Pygmalien', 'Stelle', 'Jules', 'Karnok', 'The Dragons']
+        heroes_to_query = [hero] if hero else HEROES
+        all_layers = []
+        total_runs = 0
+        for h in heroes_to_query:
+            r = query.comp(
+                hero=h,
+                all_phases=all_phases,
+                rank_filter=rank_filter,
+                required_card=required_card,
+                min_count=10,
+            )
+            for layer in r.get('layers', []):
+                layer['hero'] = h
+            all_layers.extend(r.get('layers', []))
+            total_runs += r.get('total_runs', 0)
+        # 按 score 排序，取 top10
+        all_layers.sort(key=lambda x: -x.get('score', 0))
+        result = {
+            'card': card_display,
+            'card_id': required_card,
+            'hero': hero_raw or 'all',
+            'layers': all_layers[:10],
+            'total_runs': total_runs,
+        }
+        _log_query('comp_card', {'card': card_raw, 'hero': hero_raw}, ip, len(all_layers), True)
+        return jsonify(result)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        _log_query('comp_card', {'card': card_raw}, ip, 0, False)
+        return jsonify({'error': str(e)}), 500
+
 # ===== Feedback API =====
 FEEDBACK_DB = '/opt/qiubot/data/feedback.db'
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
