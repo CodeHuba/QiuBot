@@ -1000,6 +1000,12 @@ select option {
   50% { opacity: 0.3; }
 }
 
+.runs-progress-wrap{padding:40px 20px;text-align:center;}
+.runs-progress-bar-bg{width:100%;max-width:320px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin:12px auto 8px;overflow:hidden;}
+.runs-progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--neon-violet),var(--neon-cyan));border-radius:3px;transition:width 0.3s ease;animation:runs-progress-pulse 1.5s ease-in-out infinite;}
+@keyframes runs-progress-pulse{0%,100%{opacity:1;}50%{opacity:0.6;}}
+.runs-progress-label{font-size:12px;color:var(--text-secondary);}
+
 .empty {
   text-align: center;
   padding: 50px 20px;
@@ -1658,7 +1664,22 @@ async function queryRuns(page) {
   }
   document.getElementById('runs-result').style.display = '';
   document.getElementById('comp-result').style.display = 'none';
-  document.getElementById('runs-result').innerHTML = '<div class="loading">查询中...</div>';
+  const _runsEl = document.getElementById('runs-result');
+  _runsEl.innerHTML = `<div class="runs-progress-wrap">
+    <div class="runs-progress-label">正在查询阵容数据，请稍候...</div>
+    <div class="runs-progress-bar-bg"><div class="runs-progress-bar" id="runs-pbar"></div></div>
+    <div class="runs-progress-label" id="runs-pct">0%</div>
+  </div>`;
+  let _runsPct = 0;
+  const _runsTimer = setInterval(() => {
+    if (_runsPct < 80) {
+      _runsPct += _runsPct < 30 ? 3 : _runsPct < 60 ? 1.5 : 0.5;
+      const bar = document.getElementById('runs-pbar');
+      const lbl = document.getElementById('runs-pct');
+      if (bar) bar.style.width = _runsPct.toFixed(0) + '%';
+      if (lbl) lbl.textContent = _runsPct.toFixed(0) + '%';
+    }
+  }, 200);
   const params = new URLSearchParams({min_wins: wins, page, rank});
   if (hero) params.set('hero', hero);
   if (cards) params.set('cards', cards);
@@ -1666,9 +1687,15 @@ async function queryRuns(page) {
   try {
     const res = await fetch('/api/runs?' + params);
     const data = await res.json();
-    if (data.error) { showError('runs-error', data.error); document.getElementById('runs-result').innerHTML=''; return; }
+    clearInterval(_runsTimer);
+    const bar = document.getElementById('runs-pbar');
+    const lbl = document.getElementById('runs-pct');
+    if (bar) bar.style.width = '100%';
+    if (lbl) lbl.textContent = '100%';
+    await new Promise(res => setTimeout(res, 300));
+    if (data.error) { showError('runs-error', data.error); _runsEl.innerHTML=''; return; }
     renderRuns(data, page, {hero, cards, wins, days});
-  } catch(e) { showError('runs-error', '请求失败: '+e.message); document.getElementById('runs-result').innerHTML=''; }
+  } catch(e) { clearInterval(_runsTimer); showError('runs-error', '请求失败: '+e.message); _runsEl.innerHTML=''; }
 }
 
 function renderRuns(data, page, params) {
@@ -2193,16 +2220,38 @@ async function queryComp() {
     document.getElementById('comp-result').innerHTML = '<div class="result-card"><div class="empty">请输入卡牌名称后查询阵容分析</div></div>';
     return;
   }
-  document.getElementById('comp-result').innerHTML = '<div class="loading">分析中...</div>';
+  const _compEl = document.getElementById('comp-result');
+  _compEl.innerHTML = `<div class="runs-progress-wrap">
+    <div class="runs-progress-label">正在分析阵容数据，请稍候...</div>
+    <div class="runs-progress-bar-bg"><div class="runs-progress-bar" id="comp-pbar"></div></div>
+    <div class="runs-progress-label" id="comp-pct">0%</div>
+  </div>`;
+  let _compPct = 0;
+  const _compTimer = setInterval(() => {
+    if (_compPct < 80) {
+      _compPct += _compPct < 30 ? 3 : _compPct < 60 ? 1.5 : 0.5;
+      const bar = document.getElementById('comp-pbar');
+      const lbl = document.getElementById('comp-pct');
+      if (bar) bar.style.width = _compPct.toFixed(0) + '%';
+      if (lbl) lbl.textContent = _compPct.toFixed(0) + '%';
+    }
+  }, 200);
   const params = new URLSearchParams({card, rank});
   if (hero) params.set('hero', hero);
   try {
     const res = await fetch('/api/comp/card?' + params);
     const data = await res.json();
-    if (data.error) { document.getElementById('comp-result').innerHTML = `<div class="error-msg">${data.error}</div>`; return; }
+    clearInterval(_compTimer);
+    const bar = document.getElementById('comp-pbar');
+    const lbl = document.getElementById('comp-pct');
+    if (bar) bar.style.width = '100%';
+    if (lbl) lbl.textContent = '100%';
+    await new Promise(res => setTimeout(res, 300));
+    if (data.error) { _compEl.innerHTML = `<div class="error-msg">${data.error}</div>`; return; }
     renderCompCard(data);
   } catch(e) {
-    document.getElementById('comp-result').innerHTML = `<div class="error-msg">请求失败: ${e.message}</div>`;
+    clearInterval(_compTimer);
+    _compEl.innerHTML = `<div class="error-msg">请求失败: ${e.message}</div>`;
   }
 }
 
