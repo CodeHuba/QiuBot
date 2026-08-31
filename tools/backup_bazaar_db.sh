@@ -43,3 +43,24 @@ fi
 find "$BACKUP_DIR" -name 'bazaar_runs.2*.db' -mtime +2 -delete
 REMAINING=$(ls "$BACKUP_DIR"/bazaar_runs.2*.db 2>/dev/null | wc -l)
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] 本地保留备份数: $REMAINING" >> "$LOG"
+
+# COS 只保留最近 3 天的每日备份（bazaar_runs.YYYYMMDD.db）
+# 赛季快照（pre_phase_* 等非纯日期命名）永久保留
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] 清理 COS 旧备份（保留最近3天）..." >> "$LOG"
+KEEP_DAYS=3
+CUTOFF=$(date -d "-${KEEP_DAYS} days" +%Y%m%d)
+COS_LIST=$($COSCMD list backups/ 2>/dev/null)
+DELETED=0
+while IFS= read -r line; do
+    # 只匹配 bazaar_runs.YYYYMMDD.db（纯8位日期，不含下划线后缀）
+    FNAME=$(echo "$line" | grep -oP 'bazaar_runs\.\d{8}\.db')
+    if [ -z "$FNAME" ]; then continue; fi
+    FDATE=$(echo "$FNAME" | grep -oP '\d{8}')
+    if [ "$FDATE" -lt "$CUTOFF" ]; then
+        $COSCMD delete -f "backups/$FNAME" >> "$LOG" 2>&1 && {
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] COS 已删除: $FNAME" >> "$LOG"
+            DELETED=$((DELETED+1))
+        }
+    fi
+done <<< "$COS_LIST"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] COS 清理完成，共删除 $DELETED 个旧备份" >> "$LOG"
