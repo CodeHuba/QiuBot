@@ -1,204 +1,204 @@
-# 丘Bot (QiuBot)
+# 巴扎丘Bot · The Bazaar 中文社区数据平台
 
-基于 [NcatBot](https://docs.ncatbot.xyz/) 开发的 QQ 群机器人，专为 The Bazaar 中文社区设计。
-
-## 截图预览
-
-| 物品查询 | 胜率统计 |
-|---------|---------|
-| ![物品查询](docs/screenshots/item-query.jpg) | ![胜率统计](docs/screenshots/web-ui.jpg) |
-
-**Web 查询页面**
-
-![Web UI](docs/screenshots/winrate.jpg)
+**bazaarqiubot.com** — 基于天梯真实对战数据的 The Bazaar 中文查询平台。
 
 ---
 
-## 功能概览
+## 功能介绍
 
-### 🎮 The Bazaar 插件（`#bz`）
+### 数据看板（`/`）
 
-The Bazaar 游戏数据查询，所有命令以 `#bz` 开头（也支持 `/巴扎`、`/大巴扎`）。
+全局数据概览。展示总局数、英雄分布、每日采集量趋势等统计指标，快速了解当前赛季阵容库规模。
 
-#### 游戏数据查询
+### 阵容查询（`/runs`）
 
-| 命令 | 说明 |
-|------|------|
-| `#bz <物品名>` | 查询物品详情（支持中英文、模糊匹配） |
-| `#bz skill <技能名>` | 查询技能详情 |
-| `#bz search <关键词>` | 搜索物品/技能 |
-| `#bz npc <名称>` | 查询 NPC/商人信息 |
-| `#bz day <日期>` | 查询每日商店（1-10 或 event） |
-| `#bz boss <名称>` | 查询 Boss/关卡信息 |
-| `#bz item <名称>` | 按英文名精确查询物品 |
+查询天梯玩家的真实阵容记录：
 
-#### 玩家数据
+- **筛选条件**：英雄、卡牌名称（模糊匹配）、最低胜场、时间范围、段位
+- **阵容列表**：展示卡牌、胜负场、玩家名、时间戳、截图
+- **阵容分析**：基于 FP-Growth 算法挖掘与关键卡牌共现的卡组体系，按 L1 体系 → L2 变种 → L3 细分 → 具体配置四层嵌套展示，附带截图和胜率
+- **分享**：一键截图当前阵容分析结果
 
-| 命令 | 说明 |
-|------|------|
-| `#bz me <用户名>` | 查询玩家最近战绩 |
-| `#bz stat <用户名>` | 查询玩家详细数据统计 |
-| `#bz history <用户名> [--cb]` | 玩家胜率历史趋势图（`--cb` 色盲模式） |
-| `#bz db <卡牌名>` | 查询 BazaarDB 社区数据（支持中英文） |
+### 胜率对比（`/winrate`）
 
-#### 阵容与胜率分析
+查询卡牌的 10 胜率，支持：
 
-| 命令 | 说明 |
-|------|------|
-| `#bz runs [筛选条件]` | 查询玩家阵容记录 |
-| `#bz winrate <卡牌> [+卡牌2] [英雄] [--days N]` | 卡牌 10 胜率统计，支持多卡组合、指定英雄、时间范围 |
-| `#bz partner <卡牌> [--days N]` | 卡牌搭档出现率分析 |
-| `#bz topcard <职业> [N] [--days D]` | 职业专属卡牌胜率榜（Top N，默认 10） |
+- 单卡或多卡组合（`火炮阵列 + 赛博铁尺`）
+- 按英雄、时间范围筛选
+- 多卡横向对比（≥3 张进入对比模式，展示领奖台排名）
+- 结果分享截图
 
-#### 其他
+### 搭档分析（`/partner`）
 
-| 命令 | 说明 |
-|------|------|
-| `#bz alias <别名> <卡牌名>` | 设置卡牌自定义别名 |
-| `#bz alias hero <别名> <英雄名>` | 设置英雄自定义别名 |
-| `#bz alias del <别名>` | 删除别名 |
-| `#bz alias list` | 查看所有别名 |
-| `#bz watch <用户名>` | 订阅玩家战绩推送（群内使用） |
-| `#bz unwatch <用户名>` | 取消订阅 |
-| `#bz watchlist` | 查看本群订阅列表 |
-| `#bz help` | 查看帮助 |
-| `#bz status` | 查看数据源状态 |
+分析某张卡牌在 10 胜阵容中的高频搭档，展示共现率和搭档胜率排名。
 
-**示例：**
-```
-#bz 火炮阵列
-#bz winrate 火炮阵列+赛博铁尺 海盗 --days 7
-#bz partner 武装核心
-#bz topcard 海盗 10 --days 14
-#bz history PlayerName
-#bz watch PlayerName
-```
+### 职业榜单（`/topcard`）
+
+按职业维度展示：
+
+- **卡牌胜率榜**：该职业使用率最高的卡牌及其 10 胜率排名
+- **阵容体系榜**：FP-Growth 挖掘出的该职业主流阵容（四层嵌套结构）
+
+### 冷知识（`/trivia`）
+
+社区征集的 The Bazaar 游戏机制冷知识，均经过游戏原始数据验证，支持点赞投票。
+
+### 赞助支持（`/support`）
+
+项目赞助者名单与支持方式。
 
 ---
 
-### 🌐 Web 查询页面
+## 二次开发
 
-运行在服务器 1027 端口，提供可视化数据查询界面。
-
-| 页面 | 路径 | 说明 |
-|------|------|------|
-| 阵容查询 | `/runs` | 按英雄、卡牌、胜场、时间筛选阵容列表；支持阵容分析（FP-Growth 挖掘同现卡组）和阵容分享截图 |
-| 胜率对比 | `/winrate` | 多卡组合 10 胜率查询，支持多英雄横向对比 |
-| 搭档分析 | `/partner` | 卡牌共现率与搭档胜率分析 |
-| 职业榜单 | `/topcard` | 各职业专属卡牌胜率榜 + FP-Growth 阵容挖掘 |
-| 数据看板 | `/` | 阵容库概况：总局数、英雄分布、每日采集趋势 |
-| 冷知识 | `/trivia` | 社区征集的 The Bazaar 游戏冷知识，支持投票 |
-| 赞助支持 | `/support` | 赞助者名单与项目支持信息 |
-
----
-
-### 📝 群聊总结
-
-`@bot 总结最近 X 小时 / 总结今天 / 总结昨天`
-
-由 Claude AI 驱动，按话题分组总结群聊内容，每群每 60 秒最多触发一次，最长支持 24 小时。
-
-### 💬 @对话（可选）
-
-@bot 直接对话，由 Claude AI 回复。默认关闭，可在 `chat_plugin.py` 中设置 `CHAT_ENABLED = True` 开启。
-
-### 🤖 基础功能
-
-- 自我介绍：发送「你是谁」触发
-- RBAC 权限系统：支持 user / admin / root 多级权限
-- 管理员指令：`#bz admin status/disable/enable/compact`
-
----
-
-## 数据采集
-
-玩家阵容数据由 Windows 定时任务每 2 小时自动从 [bazaardb.gg](https://bazaardb.gg/) 采集，写入本地 SQLite 数据库，并每日备份至腾讯云 COS（保留最近 3 天 + 赛季前快照）。
-
----
-
-## 环境要求
+### 环境要求
 
 - Python >= 3.10
-- NcatBot（WebSocket 模式）
-- NapCat（QQ 协议端）
+- Flask
+- mlxtend（FP-Growth 阵容挖掘）
+- python-dotenv
 
-## 部署
+### 目录结构
+
+```
+QiuBot/
+├── plugins/
+│   └── bazaar_plugin/
+│       ├── runs_query.py        # 阵容/胜率/搭档/FP-Growth 查询逻辑
+│       ├── data_client.py       # 赛季/阶段常量
+│       └── cache/
+│           ├── GameData.db      # 游戏原始数据
+│           ├── card_images.json # 卡牌图片 URL 映射
+│           └── translations/    # 中文翻译
+├── data/
+│   └── bazaar_runs.db           # 玩家阵容数据库（SQLite）
+└── web_runs/
+    ├── app.py                   # Flask API 服务（端口 1027）
+    └── static/                  # 前端页面（纯 HTML + CSS + JS）
+        ├── index.html
+        ├── runs.html
+        ├── winrate.html
+        ├── partner.html
+        ├── topcard.html
+        ├── trivia.html
+        └── support.html
+```
+
+### 本地启动
+
+**1. 克隆仓库**
 
 ```bash
 git clone https://github.com/CodeHuba/QiuBot.git
 cd QiuBot
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python main.py
 ```
 
-配置文件：`config.yaml`
-
-```yaml
-napcat:
-  ws_uri: ws://localhost:3002
-  ws_token: <token>
-```
-
-服务以 systemd 管理：
+**2. 创建虚拟环境并安装依赖**
 
 ```bash
-sudo systemctl start/stop/restart qiubot
-sudo journalctl -u qiubot -f
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install flask mlxtend python-dotenv
 ```
 
-Web 服务独立启动：
+**3. 准备数据文件**
+
+将以下文件放到对应路径：
+
+- `data/bazaar_runs.db` — 阵容数据库（SQLite，表结构见下）
+- `plugins/bazaar_plugin/cache/GameData.db` — 游戏原始数据
+- `plugins/bazaar_plugin/cache/card_images.json` — 卡牌图片映射
+
+**4. 配置环境变量**
+
+项目根目录创建 `.env`：
+
+```
+INGEST_TOKEN=your_token_here
+```
+
+**5. 启动**
 
 ```bash
 cd web_runs
-nohup venv/bin/python app.py > logs/web.log 2>&1 &
+python app.py
+```
+
+访问 `http://localhost:1027`。
+
+---
+
+### 数据库结构
+
+`bazaar_runs.db` 核心表 `runs`：
+
+```sql
+CREATE TABLE runs (
+    id          INTEGER PRIMARY KEY,
+    username    TEXT,
+    hero        TEXT,       -- Vanessa / Dooley / Mak / ...
+    wins        INTEGER,
+    losses      INTEGER,
+    rank        TEXT,       -- legendary / diamond / gold / ...
+    items       TEXT,       -- JSON 数组，卡牌名列表
+    screenshot  TEXT,       -- 截图 URL（可为空）
+    url         TEXT,       -- 原始战绩链接
+    season      INTEGER,
+    phase       TEXT,       -- 如 17.3
+    created_at  TEXT        -- UTC 时间
+);
+```
+
+### 写入数据
+
+`POST /api/ingest`，Header 携带 `Authorization: Bearer <your_token>`，Body 为 JSON：
+
+```json
+{
+  "runs": [
+    {
+      "username": "PlayerName",
+      "hero": "Vanessa",
+      "wins": 10,
+      "losses": 3,
+      "rank": "legendary",
+      "items": ["火炮阵列", "赛博铁尺", "武装核心"],
+      "screenshot": "https://...",
+      "url": "https://bazaardb.gg/...",
+      "season": 17,
+      "phase": "17.3"
+    }
+  ]
+}
 ```
 
 ---
 
-## 项目结构
+### 生产部署
+
+**启动/重启 Web 服务：**
+
+```bash
+# 启动
+cd /opt/qiubot/web_runs
+nohup venv/bin/python app.py > logs/web.log 2>&1 &
+
+# 重启
+kill $(pgrep -f 'venv/bin/python app.py') && sleep 1
+cd /opt/qiubot/web_runs && { nohup venv/bin/python app.py > logs/web.log 2>&1 & }
+```
+
+**Caddy 反向代理（HTTPS）：**
 
 ```
-QiuBot/
-├── main.py
-├── config.yaml
-├── plugins/
-│   ├── bazaar_plugin/
-│   │   ├── bazaar_plugin.py         # 指令路由与响应
-│   │   ├── gamedata_client.py       # 本地 GameData.db 查询
-│   │   ├── bazaardb_client.py       # BazaarDB 社区数据 API
-│   │   ├── runs_query.py            # 玩家阵容/胜率/搭档/阵容挖掘
-│   │   ├── translations.py          # 中英文翻译（社区维护）
-│   │   ├── formatter.py             # 卡牌信息格式化
-│   │   ├── chart.py                 # 胜率趋势图生成
-│   │   ├── subscriptions.py         # 玩家战绩订阅推送
-│   │   └── cache/                   # GameData.db / card_images.json 等
-│   ├── summary_plugin/              # 群聊总结（Claude AI）
-│   ├── chat_plugin/                 # @对话（Claude AI，默认关闭）
-│   ├── qiu_plugin/                  # 基础指令
-│   └── dev_plugin/                  # 开发调试
-├── data/
-│   ├── bazaar_runs.db               # 玩家阵容数据库（SQLite）
-│   └── rbac.json                    # 权限配置
-├── tools/
-│   ├── backup_bazaar_db.sh          # 每日备份脚本（上传 COS，保留 3 天）
-│   └── season_update.sh             # 赛季更新 SOP 脚本
-└── web_runs/                        # Web 查询页面（Flask，1027 端口）
-    ├── app.py
-    └── static/
-        ├── runs.html                # 阵容查询
-        ├── topcard.html             # 职业榜单
-        ├── winrate.html             # 胜率对比
-        ├── partner.html             # 搭档分析
-        ├── trivia.html              # 冷知识
-        └── support.html             # 赞助支持
+bazaarqiubot.com, www.bazaarqiubot.com {
+    reverse_proxy localhost:1027
+}
 ```
 
 ---
 
 ## 相关链接
 
-- [NcatBot 文档](https://docs.ncatbot.xyz/)
-- [BazaarDB](https://bazaardb.gg/)
-- [The Bazaar](https://www.howbazaar.gg/)
+- [BazaarDB](https://bazaardb.gg/) — 数据来源
+- [The Bazaar](https://www.howbazaar.gg/) — 官网
