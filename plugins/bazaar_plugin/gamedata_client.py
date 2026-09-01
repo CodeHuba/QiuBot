@@ -514,7 +514,7 @@ TIER_ZH   = {"Bronze": "铜", "Silver": "银", "Gold": "金", "Diamond": "钻", 
 HERO_ZH   = {
     "Common": "通用", "Pygmalien": "皮格马利翁", "Vanessa": "瓦内萨",
     "Dooley": "杜利", "Stelle": "斯特尔", "Jules": "朱尔斯",
-    "Mak": "马克", "The Dragons": "双龙",
+    "Mak": "马克", "The Dragons": "双龙", "Hero8": "双龙", "Karnok": "卡诺克",
 }
 TAG_ZH    = {
     "Weapon": "武器", "Shield": "护盾", "Heal": "治疗", "Damage": "伤害",
@@ -646,12 +646,13 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_e
 
 def query_raw_by_name(name: str, db_path: "str | Path") -> dict | None:
     """从 GameData.db 按名称查卡牌原始数据（支持 InternalName 或 Localization.Title.Text）。
-    返回原始 JSON dict，找不到返回 None。
+    优先返回 Item/Skill 类型，返回原始 JSON dict，找不到返回 None。
     """
     conn = sqlite3.connect(str(db_path))
     rows = conn.execute("SELECT Data FROM cards").fetchall()
     conn.close()
     name_lower = name.strip().lower()
+    fallback = None
     for (data,) in rows:
         if isinstance(data, bytes):
             data = data.decode("utf-8")
@@ -662,8 +663,11 @@ def query_raw_by_name(name: str, db_path: "str | Path") -> dict | None:
         internal = d.get("InternalName", "").lower()
         loc_title = (d.get("Localization") or {}).get("Title", {}).get("Text", "").lower()
         if name_lower in (internal, loc_title):
-            return d
-    return None
+            if d.get("Type") in ("Item", "Skill"):
+                return d
+            if fallback is None:
+                fallback = d
+    return fallback
 
 
 class GameDataClient:
