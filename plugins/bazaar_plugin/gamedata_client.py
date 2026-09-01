@@ -12,8 +12,8 @@ from typing import Any
 ACTION_ATTR_MAP = {
     "TActionPlayerDamage":          "DamageAmount",
     "TActionPlayerShieldApply":     "ShieldApplyAmount",
-    "TActionPlayerHeal":             "HealAmount",
-    "TActionPlayerHealApply":       "HealAmount",
+    "TActionPlayerHeal":            "HealAmount",   # 游戏实际使用的类型名
+    "TActionPlayerHealApply":       "HealAmount",   # 旧版兼容
     "TActionPlayerPoisonApply":     "PoisonApplyAmount",
     "TActionPlayerPoisonRemove":    "PoisonRemoveAmount",
     "TActionPlayerBurnApply":       "BurnApplyAmount",
@@ -60,7 +60,7 @@ ACTION_TARGETS_MAP = {
 }
 
 # 这些属性单位是毫秒，需要转秒显示
-MS_ATTRS = {"SlowAmount", "FreezeAmount", "HasteAmount", "ChargeAmount", "ReloadAmount", "FlatCooldownReduction", "PercentCooldownReduction",
+MS_ATTRS = {"SlowAmount", "FreezeAmount", "HasteAmount", "ChargeAmount", "ReloadAmount",
             "CooldownMax"}
 
 
@@ -99,36 +99,28 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
         "TAuraActionPlayerModifyAttribute",
     ):
         attr_type = action.get("AttributeType", "")
+        if attr_type and attr_type in tier_attrs:
+            return tier_attrs[attr_type], attr_type
         val = action.get("Value", {})
         if not isinstance(val, dict):
-            # 直接从 tier_attrs 取
-            if attr_type and attr_type in tier_attrs:
-                return tier_attrs[attr_type], attr_type
             return None, ""
         vtype = val.get("$type", "")
         if vtype == "TFixedValue":
             return val.get("Value"), attr_type
-        # TReferenceValueCardAttribute / TReferenceValuePlayerAttribute（可能带 Modifier）
+        # TReferenceValueCardAttribute / TReferenceValueCardAttributeUnscaled / TReferenceValueCardAttributeAggregate
         if "ReferenceValue" in vtype or vtype.endswith("Attribute"):
             ref_attr = val.get("AttributeType", "")
-            ref_val = tier_attrs.get(ref_attr) if ref_attr else None
-            if ref_val is not None:
-                # 处理 Modifier（如 Multiply * 5.0）
-                modifier = val.get("Modifier")
-                if isinstance(modifier, dict):
-                    mod_mode = modifier.get("ModifyMode", "")
-                    mod_val_obj = modifier.get("Value", {})
-                    mod_val = mod_val_obj.get("Value") if isinstance(mod_val_obj, dict) else None
-                    if mod_val is not None:
-                        if mod_mode == "Multiply":
-                            ref_val = ref_val * mod_val
-                        elif mod_mode == "Add":
-                            ref_val = ref_val + mod_val
-                # attr_key 用 action 的 AttributeType 决定单位（如 FlatCooldownReduction 需转秒）
-                return ref_val, attr_type
-        # 最后 fallback：从 tier_attrs 取 AttributeType
-        if attr_type and attr_type in tier_attrs:
-            return tier_attrs[attr_type], attr_type
+            if ref_attr and ref_attr in tier_attrs:
+                return tier_attrs[ref_attr], ref_attr
+        return None, ""
+
+    # TActionGameSpawnCards / TActionGameDealCards：取 SpawnContext.Limit
+    if atype in ("TActionGameSpawnCards", "TActionGameDealCards"):
+        sc = action.get("SpawnContext", {})
+        if isinstance(sc, dict):
+            lim = sc.get("Limit")
+            if isinstance(lim, dict) and lim.get("$type") == "TFixedValue":
+                return lim.get("Value"), ""
         return None, ""
 
     # 直接动作：从 ACTION_ATTR_MAP 映射
@@ -141,14 +133,39 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
     if isinstance(val, dict) and val.get("$type") == "TFixedValue":
         return val.get("Value"), ""
 
-    # TActionGameSpawnCards / TActionGameDealCards: 读 SpawnContext.Limit
-    if atype in ("TActionGameSpawnCards", "TActionGameDealCards"):
-        spawn_ctx = action.get("SpawnContext", {})
-        limit = spawn_ctx.get("Limit", {})
-        if isinstance(limit, dict) and limit.get("$type") == "TFixedValue":
-            return limit.get("Value"), ""
-
     return None, ""
+
+
+# 遭遇 ID → 名称缓存（懒加载）
+_encounter_name_cache: dict[str, str] = {}
+_encounter_cache_loaded = False
+
+def _get_encounter_name(encounter_id: str, db_path: "str | Path") -> str:
+    """根据遭遇 ID 从 GameData.db 查名称，优先返回中文。"""
+    global _encounter_cache_loaded
+    if not _encounter_cache_loaded:
+        _encounter_cache_loaded = True
+        try:
+            from . import translations as _trans
+            conn = sqlite3.connect(str(db_path))
+            rows = conn.execute("SELECT Data FROM cards").fetchall()
+            conn.close()
+            for (data,) in rows:
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8")
+                d = json.loads(data)
+                if d.get("Type") != "EventEncounter":
+                    continue
+                eid = d.get("Id", "")
+                loc = d.get("Localization") or {}
+                key = loc.get("Title", {}).get("Key", "")
+                txt = loc.get("Title", {}).get("Text", "")
+                zh = (_trans.get_zh_by_hash(key) if key else None) or txt
+                if eid and zh:
+                    _encounter_name_cache[eid] = zh
+        except Exception:
+            pass
+    return _encounter_name_cache.get(encounter_id, "")
 
 
 def build_tier_attrs(item_data: dict, tier_name: str) -> dict:
@@ -161,39 +178,6 @@ def build_tier_attrs(item_data: dict, tier_name: str) -> dict:
         if t == tier_name:
             break
     return base
-
-
-def annotate_implicit_ability_attributes(text: str, abilities: dict) -> str:
-    """为省略属性名的 {ability.X} 补全伤害/治疗/护盾等单位。
-
-    仅当该占位符之后、下一占位符之前的模板片段没有写出对应属性时追加，
-    因此不会把“造成{ability.X}伤害”渲染为“伤害伤害”。
-    """
-    attr_zh = {
-        "DamageAmount": "伤害",
-        "HealAmount": "治疗",
-        "ShieldApplyAmount": "护盾",
-        "ShieldAmount": "护盾",
-        "PoisonApplyAmount": "剧毒",
-        "BurnApplyAmount": "灼烧",
-        "RegenApplyAmount": "生命再生",
-    }
-    matches = list(re.finditer(r"\{ability\.([^}.]+)\}", text))
-    if not matches:
-        return text
-    parts, pos = [], 0
-    effect_words = tuple(set(attr_zh.values()))
-    for index, match in enumerate(matches):
-        parts.append(text[pos:match.end()])
-        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        following = text[match.end():next_start]
-        action = (abilities.get(match.group(1)) or {}).get("Action") or {}
-        label = attr_zh.get(action.get("AttributeType", ""))
-        if label and not any(word in following for word in effect_words):
-            parts.append(label)
-        pos = match.end()
-    parts.append(text[pos:])
-    return "".join(parts)
 
 
 def render_tooltip(
@@ -209,14 +193,15 @@ def render_tooltip(
     def resolve_single(ph: str):
         parts = ph.strip().split(".")
         if len(parts) < 2:
-            # 单个占位符：直接从 tier_attrs 取属性值（如 {TempoCost}）
-            attr_name = parts[0]
-            if attr_name in tier_attrs:
-                val = fmt_val(tier_attrs[attr_name], attr_name)
-                # TempoCost 加「节奏」标签
-                if attr_name == 'TempoCost':
-                    return f'节奏 {val}'
-                return val
+            # {custom_0} / {custom_1} / {TempoCost} 等直接从 tier_attrs 取
+            key = ph.strip()
+            # custom_0 → Custom_0
+            for try_key in (key, key.capitalize(), "Custom_" + key.split("_")[-1] if "_" in key else ""):
+                if try_key and try_key in tier_attrs:
+                    return fmt_val(tier_attrs[try_key])
+            # TempoCost 大小写精确匹配
+            if key in tier_attrs:
+                return fmt_val(tier_attrs[key])
             return None
         prefix, ab_id = parts[0], parts[1]
         sub = parts[2] if len(parts) > 2 else ""
@@ -236,25 +221,23 @@ def render_tooltip(
                     return fmt_val(tc.get("Value"))
                 return "1"
             if sub == "mod":
-                # {ability.X.mod} 取 Action.Value.Modifier.Value（通常是 TReferenceValueCardAttribute）
-                # 即倍率因子，从 tier_attrs 中解析
+                # ability.X.mod → action.Value.Modifier.Value（逆向 GetModifierValue）
                 val = action.get("Value", {})
                 if isinstance(val, dict):
-                    modifier = val.get("Modifier")
-                    if isinstance(modifier, dict):
-                        mod_val_obj = modifier.get("Value", {})
-                        if isinstance(mod_val_obj, dict):
-                            mvtype = mod_val_obj.get("$type", "")
-                            if mvtype == "TFixedValue":
-                                return fmt_val(mod_val_obj.get("Value"))
-                            if "ReferenceValue" in mvtype or mvtype.endswith("Attribute"):
-                                ref_attr = mod_val_obj.get("AttributeType", "")
-                                if ref_attr and ref_attr in tier_attrs:
-                                    return fmt_val(tier_attrs[ref_attr], ref_attr)
+                    mod = val.get("Modifier", {})
+                    if isinstance(mod, dict):
+                        mv = mod.get("Value", {})
+                        if isinstance(mv, dict) and mv.get("$type") == "TFixedValue":
+                            return fmt_val(mv.get("Value"))
+                        # modifier.Value 是 TReferenceValueCardAttribute
+                        if isinstance(mv, dict) and "ReferenceValue" in mv.get("$type", ""):
+                            ref = mv.get("AttributeType", "")
+                            if ref and ref in tier_attrs:
+                                return fmt_val(tier_attrs[ref])
                 return None
             v, ak = extract_value(action, tier_attrs)
             if v is None:
-                return "?"
+                return None
             return fmt_val(v, ak)
 
         elif prefix == "aura":
@@ -263,9 +246,20 @@ def render_tooltip(
                 return None
             action = aura.get("Action", {})
             if sub == "mod":
+                # aura.X.mod → action.Value.Modifier.Value（逆向 GetModifierValue）
                 val = action.get("Value", {})
-                if isinstance(val, dict) and val.get("$type") == "TFixedValue":
-                    return fmt_val(val.get("Value"))
+                if isinstance(val, dict):
+                    mod = val.get("Modifier", {})
+                    if isinstance(mod, dict):
+                        mv = mod.get("Value", {})
+                        if isinstance(mv, dict) and mv.get("$type") == "TFixedValue":
+                            return fmt_val(mv.get("Value"))
+                        # modifier.Value 是 TReferenceValueCardAttribute
+                        if isinstance(mv, dict) and "ReferenceValue" in mv.get("$type", ""):
+                            ref = mv.get("AttributeType", "")
+                            if ref and ref in tier_attrs:
+                                return fmt_val(tier_attrs[ref])
+                return None
             v, ak = extract_value(action, tier_attrs)
             if v is None:
                 return None
@@ -288,50 +282,33 @@ def render_tooltip(
     return re.sub(r"\{([^}]+)\}", replace_ph, text)
 
 
-
-def _resolve_encounter_name(card_id: str, db_path: str = "") -> str:
-    """根据遭遇卡 UUID 查对应英雄名（用于 Quest 条件显示）"""
-    if not db_path or not card_id:
-        return "?"
-    try:
-        from . import translations as trans
-        conn = __import__("sqlite3").connect(str(db_path))
-        rows = conn.execute("SELECT Data FROM cards").fetchall()
-        conn.close()
-        card_data_module = __import__("json")
-        for r in rows:
-            raw = r[0]
-            if isinstance(raw, bytes):
-                raw = raw.decode("utf-8")
-            d = card_data_module.loads(raw)
-            if d.get("Id") == card_id:
-                loc_text = (d.get("Localization") or {}).get("Title", {}).get("Text", "")
-                loc_key  = (d.get("Localization") or {}).get("Title", {}).get("Key", "")
-                zh = trans.get_zh(loc_text) or trans.get_zh_by_key(loc_key) or loc_text
-                return zh or "?"
-    except Exception:
-        pass
-    return "?"
-
-def get_quest_tooltips(item_data: dict, tier_name: str, db_path: str = "") -> list[dict]:
+def get_quest_tooltips(item_data: dict, tier_name: str, db_path: "str | Path" = "") -> list[dict]:
     """解析 Quest 条件和奖励，返回列表 [{condition, reward_tooltips}]"""
     TRIGGER_ZH = {
-        "TTriggerOnCardFired":            "触发本卡",
-        "TTriggerOnCardUsed":             "使用本卡",
-        "TTriggerOnCardSold":             "出售本卡",
-        "TTriggerOnCardBought":           "购买本卡",
-        "TTriggerOnEncounterSelected":    "选择一个遭遇",
-        "TTriggerOnDayStart":             "每天开始",
-        "TTriggerOnCombatStart":          "战斗开始",
-        "TTriggerOnCombatEnd":            "战斗结束",
-        "TTriggerOnPlayerDamaged":        "受到伤害",
-        "TTriggerOnPlayerKilled":         "击杀对手",
-        "TTriggerOnCardPurchased":        "购买物品",
-        "TTriggerOnCardAttributeChanged": "属性提升时",
-        "TTriggerOnItemUsed":             "使用物品时",
-        "TTriggerOnPlayerHealthChanged":  "生命值变化时",
-        "TTriggerOnTurnStart":            "回合开始",
-        "TTriggerOnTurnEnd":              "回合结束",
+        "TTriggerOnCardFired":              "触发本卡",
+        "TTriggerOnCardUsed":               "使用本卡",
+        "TTriggerOnCardSold":               "出售本卡",
+        "TTriggerOnCardBought":             "购买本卡",
+        "TTriggerOnCardPurchased":          "购买本卡",
+        "TTriggerOnEncounterSelected":      "选择一个遭遇",
+        "TTriggerOnDayStart":               "每天开始",
+        "TTriggerOnCombatStart":            "战斗开始",
+        "TTriggerOnCombatEnd":              "战斗结束",
+        "TTriggerOnFightEnded":             "战斗结束",
+        "TTriggerOnPlayerDamaged":          "受到伤害",
+        "TTriggerOnPlayerKilled":           "击杀对手",
+        "TTriggerOnItemUsed":               "使用物品",
+        "TTriggerOnCardStartedFlying":      "物品开始飞行",
+        "TTriggerOnCardStartsFlying":       "物品开始飞行",
+        "TTriggerOnCardAttributeChanged":   "属性改变",
+        "TTriggerOnCardQuestCompleted":     "任务完成",
+        "TTriggerOnCardPerformedSlow":      "触发减速",
+        "TTriggerOnCardPerformedPoison":    "触发中毒",
+        "TTriggerOnCardPerformedRegen":     "触发回复",
+        "TTriggerOnCardPerformedBurn":      "触发燃烧",
+        "TTriggerOnCardPerformedFreeze":    "触发冻结",
+        "TTriggerOnCardPerformedHaste":     "触发加速",
+        "TTriggerOnCardPerformedDestruction": "触发摧毁",
     }
     ATTR_ZH = {
         "Quest_1": "任务1", "Quest_2": "任务2", "Quest_3": "任务3",
@@ -341,8 +318,38 @@ def get_quest_tooltips(item_data: dict, tier_name: str, db_path: str = "") -> li
     COND_TYPE_ZH = {
         "TCardConditionalTier": lambda c: "品质为" + "/".join(TIER_ZH.get(t, t) for t in (c.get("Tiers") or [])),
         "TCardConditionalTag":  lambda c: "有标签" + str(c.get("Tag", "")),
-        "TCardConditionalId":   lambda c: _resolve_encounter_name(c.get("Id", ""), db_path),
     }
+
+    def get_trigger_name(trigger: dict) -> str:
+        """递归解析 trigger，支持 TTriggerOr"""
+        ttype = trigger.get("$type", "")
+        if ttype == "TTriggerOr":
+            sub_triggers = trigger.get("Triggers") or []
+            parts = [get_trigger_name(t) for t in sub_triggers]
+            # 去重后用"或"连接
+            seen, unique = set(), []
+            for p in parts:
+                if p not in seen:
+                    seen.add(p)
+                    unique.append(p)
+            return "或".join(unique) if unique else "触发"
+        name = TRIGGER_ZH.get(ttype, ttype.replace("TTriggerOn", ""))
+        cond = trigger.get("Conditions")
+        if cond:
+            ctype = cond.get("$type", "")
+            if ctype == "TCardConditionalId" and db_path:
+                enc_id = cond.get("Id", "")
+                enc_name = _get_encounter_name(enc_id, db_path) if enc_id else ""
+                if enc_name:
+                    name = f"选择遭遇「{enc_name}」"
+            else:
+                handler = COND_TYPE_ZH.get(ctype)
+                if handler:
+                    try:
+                        name += "（" + handler(cond) + "）"
+                    except Exception:
+                        pass
+        return name
 
     quests = item_data.get("Quests") or []
     tier_attrs = build_tier_attrs(item_data, tier_name)
@@ -354,47 +361,30 @@ def get_quest_tooltips(item_data: dict, tier_name: str, db_path: str = "") -> li
         for entry in (qg.get("Entries") or []):
             # 触发条件
             trigger = entry.get("Trigger") or {}
-            ttype = trigger.get("$type", "")
-            tname = TRIGGER_ZH.get(ttype, ttype.replace("TTriggerOn", ""))
-            cond = trigger.get("Conditions")
-            cond_str = ""
-            if cond:
-                ctype = cond.get("$type", "")
-                handler = COND_TYPE_ZH.get(ctype)
-                if handler:
-                    try:
-                        resolved = handler(cond)
-                        # TCardConditionalId 表示"选择特定英雄的遭遇"，嵌入 trigger 描述
-                        if ctype == "TCardConditionalId" and ttype == "TTriggerOnEncounterSelected":
-                            tname = f"选择[{resolved}]的遭遇"
-                        else:
-                            cond_str = "（" + resolved + "）"
-                    except Exception:
-                        pass
+            tname = get_trigger_name(trigger)
             target = entry.get("Target", 1)
-            condition_text = f"{tname}{cond_str} x{target}" if target > 1 else f"{tname}{cond_str}"
+            condition_text = f"{tname} x{target}" if target > 1 else tname
 
             # 奖励
             reward = entry.get("Reward") or {}
             reward_tips = []
-            # 奖励 tooltip 文本
             rew_loc = reward.get("Localization") or {}
             for t in rew_loc.get("Tooltips") or []:
                 txt = (t.get("Content") or {}).get("Text", "")
+                key = (t.get("Content") or {}).get("Key", "")
                 if txt:
-                    # 奖励有自己的 abilities/auras，合并后渲染
+                    # 先用 hash 查官方翻译模板，再填值
+                    from . import translations as _trans
+                    txt_zh = (_trans.get_zh_by_hash(key) if key else None) or _trans.get_tooltip_zh(txt) or txt
                     rew_abs = {**abilities, **(reward.get("Abilities") or {})}
                     rew_auras = {**auras, **(reward.get("Auras") or {})}
-                    # 奖励属性：优先用 tier-specific，fallback 到通用
                     rew_tiers = reward.get("Tiers") or {}
                     rew_attrs = {**tier_attrs}
                     if tier_name in rew_tiers:
                         rew_attrs.update(rew_tiers[tier_name].get("Attributes") or {})
                     elif reward.get("Attributes"):
                         rew_attrs.update(reward["Attributes"])
-                    from . import translations as _trans
-                    zh_tpl = _trans.get_tooltip_zh(txt) or (_trans.get_zh_by_key(t.get("Content", {}).get("Key", "")) if t.get("Content", {}).get("Key") else None) or txt
-                    reward_tips.append(render_tooltip(zh_tpl, rew_abs, rew_auras, rew_attrs))
+                    reward_tips.append(render_tooltip(txt_zh, rew_abs, rew_auras, rew_attrs))
 
             result.append({
                 "condition": condition_text,
@@ -427,13 +417,9 @@ def get_tier_tooltips(item_data: dict, tier_name: str) -> list[str]:
         tip_cond = t.get("TooltipCondition")
         if tip_cond and tip_cond not in (None, "None"):
             continue  # Chilled/Heated/Enraged 等状态条件 tooltip 跳过
-        content_obj = t.get("Content", {})
-        txt = content_obj.get("Text", "")
-        key = content_obj.get("Key", "")
+        txt = t.get("Content", {}).get("Text", "")
         if txt:
-            from . import translations as _trans
-            zh_tpl = (key and _trans.get_zh_by_key(key)) or _trans.get_tooltip_zh(txt) or txt
-            tooltips.append(render_tooltip(zh_tpl, abilities, auras, tier_attrs))
+            tooltips.append(render_tooltip(txt, abilities, auras, tier_attrs))
 
     return tooltips
 
@@ -450,14 +436,11 @@ def get_enchant_tooltips(item_data: dict, ench_name: str) -> list[str]:
     all_abilities = {**item_data.get("Abilities", {}), **ench.get("Abilities", {})}
     all_auras = {**item_data.get("Auras", {}), **ench.get("Auras", {})}
 
-    from . import translations as trans
     tooltips: list[str] = []
     for t in ench.get("Localization", {}).get("Tooltips", []):
         txt = t.get("Content", {}).get("Text", "")
         if txt:
-            # 先取中文模板（保留占位符），再渲染数值
-            zh_tpl = trans.get_tooltip_zh(txt) or txt
-            tooltips.append(render_tooltip(zh_tpl, all_abilities, all_auras, ench_attrs))
+            tooltips.append(render_tooltip(txt, all_abilities, all_auras, ench_attrs))
     return tooltips
 
 
@@ -532,13 +515,20 @@ HERO_ZH   = {
     "Common": "通用", "Pygmalien": "皮格马利翁", "Vanessa": "瓦内萨",
     "Dooley": "杜利", "Stelle": "斯特尔", "Jules": "朱尔斯",
     "Mak": "马克", "The Dragons": "双龙",
-    "Hero8": "双龙",
 }
 TAG_ZH    = {
-    "Weapon": "武器", "Tool": "工具", "Food": "食物", "Property": "房产",
-    "Friend": "同伴", "Vehicle": "载具", "Damage": "伤害", "Shield": "护盾",
-    "Heal": "治疗", "Poison": "毒", "Burn": "灼烧", "Slow": "减速",
-    "Freeze": "冻结", "Haste": "加速", "Loot": "战利品", "Instrument": "乐器", "Dragon": "龙", "Aquatic": "水生", "Core": "核心", "Dinosaur": "恐龙", "Drone": "无人机", "Merchant": "商人", "Potion": "药水", "Ray": "射线", "Reagent": "试剂", "Relic": "遗物", "Tech": "科技", "Toy": "玩具", "Trap": "陷阱", "Apparel": "服装",
+    "Weapon": "武器", "Shield": "护盾", "Heal": "治疗", "Damage": "伤害",
+    "Burn": "灼烧", "Freeze": "冻结", "Poison": "毒素", "Slow": "减速",
+    "Haste": "加速", "Crit": "暴击", "Ammo": "弹药", "Tool": "工具",
+    "Food": "食物", "Toy": "玩具", "Apparel": "服装", "Property": "房产",
+    "Vehicle": "载具", "Aquatic": "水系", "Dinosaur": "恐龙", "Dragon": "龙",
+    "Drone": "无人机", "Flying": "飞行", "Friend": "伙伴", "Tech": "科技",
+    "Relic": "遗物", "Reagent": "试剂", "Potion": "药水", "Quest": "任务",
+    "Economy": "经济", "Income": "收入", "Gold": "黄金", "Loot": "战利品",
+    "Experience": "经验", "Level": "等级", "Health": "生命值", "Regen": "回复",
+    "Core": "核心", "Ray": "射线", "Ticket": "票券", "Value": "价值",
+    "Joy": "喜悦", "Charge": "充能", "Cooldown": "冷却", "Instrument": "乐器",
+    "Unpurchasable": "不可购买",
 }
 ENC_ZH    = {
     "Golden": "黄金", "Heavy": "沉重", "Icy": "寒冰", "Turbo": "疾速",
@@ -559,7 +549,7 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_e
     loc = raw.get("Localization") or {}
     title_text = loc.get("Title", {}).get("Text", "") or raw.get("InternalName", "")
     title_key  = loc.get("Title", {}).get("Key", "")
-    name_zh = zh_name or trans.get_zh(title_text) or (trans.get_zh_by_key(title_key) if title_key else "") or title_text
+    name_zh = zh_name or trans.get_zh(title_text) or (trans.get_zh_by_hash(title_key) if title_key else "") or title_text
     name_en = title_text
 
     size_label = {"Small": "小", "Medium": "中", "Large": "大", "Small Large": "小/大"}.get(
@@ -601,10 +591,6 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_e
             cd = tier_attrs.get("CooldownMax")
             if cd:
                 lines.append(f"冷却{ms_to_s(cd)}s")
-            # AmmoMax 不会自动出现在 tooltip 中；单独展示以避免不同品质被误合并。
-            ammo = tier_attrs.get("AmmoMax")
-            if ammo is not None:
-                lines.append(f"弹药{int(ammo)}")
             multicast = tier_attrs.get("Multicast", 1)
             if multicast and multicast > 1:
                 lines.append(f"多重x{int(multicast)}")
@@ -613,14 +599,12 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_e
                 tip_cond = t.get("TooltipCondition")
                 if tip_cond and tip_cond not in (None, "None"):
                     continue
-                content_obj = t.get("Content") or {}
-                txt = content_obj.get("Text", "")
-                key = content_obj.get("Key", "")
+                txt = (t.get("Content") or {}).get("Text", "")
                 if txt:
-                    # 先用 Key 查 hash 翻译，再 fallback tooltip缓存，最后用原文
-                    zh_tpl = (key and trans.get_zh_by_key(key)) or trans.get_tooltip_zh(txt) or txt
-                    zh_tpl = annotate_implicit_ability_attributes(zh_tpl, abilities)
-                    rendered = render_tooltip(zh_tpl, abilities, auras, tier_attrs)
+                    # 用 hash 查官方翻译模板，再填值（和游戏本体逻辑对齐）
+                    key = (t.get("Content") or {}).get("Key", "")
+                    txt_zh = (trans.get_zh_by_hash(key) if key else None) or trans.get_tooltip_zh(txt) or txt
+                    rendered = render_tooltip(txt_zh, abilities, auras, tier_attrs)
                     lines.append(rendered)
             if lines == prev_block:
                 prev_tiers.append(tn)
@@ -652,12 +636,10 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_e
             enc_name = ENC_ZH.get(enc_key, enc_key)
             tips = get_enchant_tooltips(raw, enc_key)
             if tips:
-                out.append(f"  [{enc_name}] " + "  ".join(tips))
+                zh_tips = [trans.get_tooltip_zh(t) or t for t in tips]
+                out.append(f"  [{enc_name}] " + "  ".join(zh_tips))
             else:
                 out.append(f"  [{enc_name}]")
-    elif enchs and not show_enchants:
-        out.append("─")
-        out.append(f"附魔: {len(enchs)} 种 (使用 -e 参数查看详情)")
 
     return "\n".join(out)
 
