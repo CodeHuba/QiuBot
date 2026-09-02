@@ -1926,6 +1926,7 @@ async function loadFeedback(reset) {
         '</div>' +
         '<div class="fb-comments-area" id="comments-' + item.id + '"></div>';
       list.appendChild(card);
+      toggleComments(item.id);
     });
     _fbPage++;
     document.getElementById('fb-loadmore').style.display = (data.page < data.pages) ? 'block' : 'none';
@@ -2080,5 +2081,6 @@ window.addEventListener('DOMContentLoaded', () => {
   <div style="margin-top:8px;font-size:12px">© 2026 BazaarQiuBot - The Bazaar 中文社区数据服务</div>
 </footer>
 
+<script src="/static/announcement.js"></script>
 </body>
 </html>

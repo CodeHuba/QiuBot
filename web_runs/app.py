@@ -231,6 +231,18 @@ def _init_stats_tables():
     )''')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_trivia_votes_trivia ON trivia_votes(trivia_id)')
 
+    conn.execute('''CREATE TABLE IF NOT EXISTS announcements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        published_at TEXT
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_announcements_status ON announcements(status)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_announcements_published_at ON announcements(published_at)')
+
     conn.commit()
     conn.close()
 
@@ -1312,6 +1324,112 @@ def admin_delete_trivia(tid):
     conn = _sl.connect('/opt/qiubot/data/stats.db')
     conn.execute('DELETE FROM trivia WHERE id=?', (tid,))
     conn.execute('DELETE FROM trivia_votes WHERE trivia_id=?', (tid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+# ===== Announcement API =====
+
+@app.route('/api/announcement/latest', methods=['GET'])
+def get_latest_announcement():
+    """公开接口：返回最新已发布公告"""
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    row = conn.execute(
+        "SELECT id, title, content, published_at FROM announcements WHERE status='published' ORDER BY published_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'announcement': None})
+    return jsonify({'announcement': {
+        'id': row[0], 'title': row[1], 'content': row[2], 'publishedAt': row[3]
+    }})
+
+@app.route('/api/admin/announcements', methods=['GET'])
+def admin_list_announcements():
+    """管理接口：返回所有公告"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    rows = conn.execute(
+        'SELECT id, title, content, status, created_at, published_at FROM announcements ORDER BY created_at DESC'
+    ).fetchall()
+    conn.close()
+    return jsonify({'announcements': [
+        {'id': r[0], 'title': r[1], 'content': r[2], 'status': r[3], 'createdAt': r[4], 'publishedAt': r[5]}
+        for r in rows
+    ]})
+
+@app.route('/api/admin/announcements', methods=['POST'])
+def admin_create_announcement():
+    """管理接口：新增公告"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    content = (data.get('content') or '').strip()
+    if not title or not content:
+        return jsonify({'error': 'title 和 content 不能为空'}), 400
+    status = data.get('status', 'draft')
+    if status not in ('draft', 'published'):
+        status = 'draft'
+    now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    published_at = now if status == 'published' else None
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    cur = conn.execute(
+        'INSERT INTO announcements (title, content, status, created_at, published_at) VALUES (?,?,?,?,?)',
+        (title, content, status, now, published_at)
+    )
+    ann_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'id': ann_id, 'title': title, 'content': content, 'status': status, 'createdAt': now, 'publishedAt': published_at})
+
+@app.route('/api/admin/announcements/<int:aid>', methods=['PUT'])
+def admin_update_announcement(aid):
+    """管理接口：更新公告"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    data = request.get_json() or {}
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    row = conn.execute('SELECT id, title, content, status, published_at FROM announcements WHERE id=?', (aid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': '公告不存在'}), 404
+    title = (data.get('title') or row[1]).strip()
+    content = (data.get('content') or row[2]).strip()
+    status = data.get('status', row[3])
+    if status not in ('draft', 'published'):
+        status = row[3]
+    now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    published_at = row[4]
+    if status == 'published' and not published_at:
+        published_at = now
+    elif status == 'draft':
+        published_at = None
+    conn.execute(
+        'UPDATE announcements SET title=?, content=?, status=?, updated_at=?, published_at=? WHERE id=?',
+        (title, content, status, now, published_at, aid)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({'id': aid, 'title': title, 'content': content, 'status': status, 'updatedAt': now, 'publishedAt': published_at})
+
+@app.route('/api/admin/announcements/<int:aid>', methods=['DELETE'])
+def admin_delete_announcement(aid):
+    """管理接口：删除公告"""
+    auth = request.authorization
+    if not auth or auth.password != os.getenv('STATS_PASSWORD', ''):
+        return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="BazaarQiuBot Admin"'})
+    import sqlite3 as _sl
+    conn = _sl.connect('/opt/qiubot/data/stats.db')
+    conn.execute('DELETE FROM announcements WHERE id=?', (aid,))
     conn.commit()
     conn.close()
     return jsonify({'ok': True})

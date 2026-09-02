@@ -74,6 +74,7 @@ body{font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif;background:#
     <button class="day-btn" onclick="setDays(90)">近 90 天</button>
     <button class="day-btn" style="margin-left:auto;background:#8A4DFF;color:#fff;border-color:#8A4DFF" onclick="openSupportersModal()">赞赏者管理</button>
     <button class="day-btn" style="background:#F5C76A;color:#0a0e1a;border-color:#F5C76A" onclick="openTriviaModal()">冷知识管理</button>
+    <button class="day-btn" style="background:#34d399;color:#0a0e1a;border-color:#34d399" onclick="openAnnouncementModal()">公告管理</button>
   </div>
 
   <div id="main-content"><div class="loading">加载中...</div></div>
@@ -860,6 +861,168 @@ async function deleteTriviaItem(id) {
   } catch(e) {
     alert('删除失败');
   }
+}
+</script>
+
+<!-- 公告管理模态框 -->
+<div class="modal-overlay" id="announcement-modal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <h3>公告管理</h3>
+      <button class="modal-close" onclick="closeAnnouncementModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center">
+        <button class="btn-primary" style="background:#34d399;color:#0a0e1a" onclick="showAnnForm()">+ 新增公告</button>
+        <span style="color:#6b7280;font-size:13px;margin-left:auto" id="ann-admin-count">-</span>
+      </div>
+
+      <!-- 新增/编辑表单 -->
+      <div id="ann-form" style="display:none;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:16px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:#34d399" id="ann-form-title">新增公告</div>
+        <input type="hidden" id="ann-edit-id">
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:4px">标题</label>
+          <input type="text" id="ann-input-title" placeholder="公告标题" style="width:100%;padding:8px;background:#0a0e1a;border:1px solid #374151;border-radius:4px;color:#e2e8f0;font-size:14px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:4px">内容（支持 Markdown）</label>
+          <textarea id="ann-input-content" rows="8" placeholder="公告内容，支持 Markdown 格式..." style="width:100%;padding:8px;background:#0a0e1a;border:1px solid #374151;border-radius:4px;color:#e2e8f0;font-size:14px;box-sizing:border-box;resize:vertical;font-family:monospace"></textarea>
+        </div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="ann-input-published" style="width:15px;height:15px;accent-color:#34d399">
+          <label for="ann-input-published" style="font-size:13px;color:#9ca3af;cursor:pointer">立即发布</label>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" style="background:#34d399;color:#0a0e1a;flex:1" onclick="submitAnnouncement()">保存</button>
+          <button class="btn-secondary" style="flex:1" onclick="hideAnnForm()">取消</button>
+        </div>
+      </div>
+
+      <div id="ann-admin-list" style="max-height:500px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+.ann-item { background:#111827; border:1px solid #1f2937; border-radius:8px; padding:14px 16px; margin-bottom:10px; }
+.ann-item:hover { border-color:#374151; }
+.ann-item-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:6px; }
+.ann-item-title { font-size:14px; font-weight:600; color:#f9fafb; }
+.ann-item-meta { font-size:12px; color:#6b7280; margin-top:4px; }
+.ann-badge-published { background:#065f46; color:#34d399; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+.ann-badge-draft { background:#1f2937; color:#9ca3af; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+</style>
+
+<script>
+let annAdminData = [];
+
+function openAnnouncementModal() {
+  document.getElementById('announcement-modal').classList.add('open');
+  loadAnnAdmin();
+}
+
+function closeAnnouncementModal() {
+  document.getElementById('announcement-modal').classList.remove('open');
+  hideAnnForm();
+}
+
+function showAnnForm(id) {
+  document.getElementById('ann-form').style.display = 'block';
+  if (id) {
+    const a = annAdminData.find(x => x.id === id);
+    if (!a) return;
+    document.getElementById('ann-form-title').textContent = '编辑公告';
+    document.getElementById('ann-edit-id').value = id;
+    document.getElementById('ann-input-title').value = a.title;
+    document.getElementById('ann-input-content').value = a.content;
+    document.getElementById('ann-input-published').checked = a.status === 'published';
+  } else {
+    document.getElementById('ann-form-title').textContent = '新增公告';
+    document.getElementById('ann-edit-id').value = '';
+    document.getElementById('ann-input-title').value = '';
+    document.getElementById('ann-input-content').value = '';
+    document.getElementById('ann-input-published').checked = false;
+  }
+}
+
+function hideAnnForm() {
+  document.getElementById('ann-form').style.display = 'none';
+}
+
+async function loadAnnAdmin() {
+  try {
+    const resp = await fetch('/api/admin/announcements');
+    const data = await resp.json();
+    annAdminData = data.announcements || [];
+    renderAnnList();
+  } catch(e) {
+    document.getElementById('ann-admin-list').innerHTML = '<div style="color:#f87171;text-align:center;padding:20px">加载失败</div>';
+  }
+}
+
+function renderAnnList() {
+  const list = document.getElementById('ann-admin-list');
+  document.getElementById('ann-admin-count').textContent = `共 ${annAdminData.length} 条`;
+  if (!annAdminData.length) {
+    list.innerHTML = '<div style="color:#6b7280;text-align:center;padding:30px">暂无公告</div>';
+    return;
+  }
+  list.innerHTML = annAdminData.map(a => `
+    <div class="ann-item">
+      <div class="ann-item-header">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="ann-item-title">${a.title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+            <span class="${a.status === 'published' ? 'ann-badge-published' : 'ann-badge-draft'}">${a.status === 'published' ? '已发布' : '草稿'}</span>
+          </div>
+          <div class="ann-item-meta">${a.publishedAt ? '发布于 ' + a.publishedAt.slice(0,16) : '创建于 ' + (a.createdAt||'').slice(0,16)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn-icon" onclick="showAnnForm(${a.id})" title="编辑">✏️</button>
+          <button class="btn-icon" onclick="toggleAnnStatus(${a.id})" title="${a.status === 'published' ? '撤回草稿' : '发布'}">${a.status === 'published' ? '📥' : '📢'}</button>
+          <button class="btn-icon danger" onclick="deleteAnn(${a.id})" title="删除">🗑️</button>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.content.replace(/</g,'&lt;').replace(/>/g,'&gt;').slice(0,80)}${a.content.length>80?'...':''}</div>
+    </div>`).join('');
+}
+
+async function submitAnnouncement() {
+  const id = document.getElementById('ann-edit-id').value;
+  const title = document.getElementById('ann-input-title').value.trim();
+  const content = document.getElementById('ann-input-content').value.trim();
+  const published = document.getElementById('ann-input-published').checked;
+  if (!title || !content) { alert('标题和内容不能为空'); return; }
+  const body = { title, content, status: published ? 'published' : 'draft' };
+  try {
+    if (id) {
+      await fetch(`/api/admin/announcements/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    } else {
+      await fetch('/api/admin/announcements', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    }
+    hideAnnForm();
+    loadAnnAdmin();
+  } catch(e) { alert('保存失败'); }
+}
+
+async function toggleAnnStatus(id) {
+  const a = annAdminData.find(x => x.id === id);
+  if (!a) return;
+  const newStatus = a.status === 'published' ? 'draft' : 'published';
+  try {
+    await fetch(`/api/admin/announcements/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status: newStatus}) });
+    loadAnnAdmin();
+  } catch(e) { alert('操作失败'); }
+}
+
+async function deleteAnn(id) {
+  const a = annAdminData.find(x => x.id === id);
+  if (!a || !confirm(`确认删除公告「${a.title}」？`)) return;
+  try {
+    await fetch(`/api/admin/announcements/${id}`, {method:'DELETE'});
+    loadAnnAdmin();
+  } catch(e) { alert('删除失败'); }
 }
 </script>
 
