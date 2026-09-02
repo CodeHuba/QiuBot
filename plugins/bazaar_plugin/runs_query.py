@@ -869,7 +869,7 @@ class RunsQuery:
                 for ds_b in decks:
                     if ds_b in visited:
                         continue
-                    if jaccard(ds_a - l3_skel, ds_b - l3_skel) >= 0.80:
+                    if jaccard(ds_a - l3_skel, ds_b - l3_skel) >= 0.50:
                         m_cnt += deck_stats[ds_b]['count']
                         m_win += deck_stats[ds_b]['wins']
                         visited.add(ds_b)
