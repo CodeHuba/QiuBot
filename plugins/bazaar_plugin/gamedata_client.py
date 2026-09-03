@@ -91,7 +91,7 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
     """
     atype = action.get("$type", "")
 
-    # 修改属性类动作：读 AttributeType
+    # 修改属性类动作：值的来源是 Value 字段，AttributeType 是被修改的目标属性
     if atype in (
         "TActionCardModifyAttribute",
         "TAuraActionCardModifyAttribute",
@@ -99,8 +99,6 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
         "TAuraActionPlayerModifyAttribute",
     ):
         attr_type = action.get("AttributeType", "")
-        if attr_type and attr_type in tier_attrs:
-            return tier_attrs[attr_type], attr_type
         val = action.get("Value", {})
         if not isinstance(val, dict):
             return None, ""
@@ -112,6 +110,9 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
             ref_attr = val.get("AttributeType", "")
             if ref_attr and ref_attr in tier_attrs:
                 return tier_attrs[ref_attr], ref_attr
+        # fallback：直接读目标属性值
+        if attr_type and attr_type in tier_attrs:
+            return tier_attrs[attr_type], attr_type
         return None, ""
 
     # TActionGameSpawnCards / TActionGameDealCards：取 SpawnContext.Limit
