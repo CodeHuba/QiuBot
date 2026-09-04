@@ -151,19 +151,12 @@ def format_help() -> str:
         "#bz me <用户名>      查玩家分数/排名/留言\n"
         "#bz stat <用户名>    查本赛季统计(走势+英雄)\n"
         "#bz history <用户名> 最近5天对局记录\n"
-        "#bz item <名字>      查物品\n"
-        "#bz skill <名字>     查技能\n"
-        "#bz db <名字>        查卡牌(bazaardb.gg 在线数据，支持中英文)\n"
-        "#bz npc <名字>       查商人\n"
-        "#bz day <1-10|event> 列当日 encounter\n"
-        "#bz boss <名字>      查 encounter 详情\n"
-        "#bz search <关键词>  跨物品/技能搜索\n"
+        "#bz db <名字>        查卡牌（支持中英文）\n"
+        "#bz winrate <卡牌>   查卡牌/组合10胜率\n"
         "─ 群订阅(仅群聊)\n"
         "#bz watch <用户名>   订阅每日 10:00 播报\n"
         "#bz unwatch <用户名> 取消订阅\n"
         "#bz watchlist        本群订阅列表\n"
-        "─\n"
-        "#bz status           缓存状态\n"
         "━━━━━━━━━━━━━━\n"
         "示例: #bz watch qifeiovo    #bz db 万剑之王"
     )
@@ -741,90 +734,4 @@ def format_winrate(result: dict, hero: str = None, days: int = None, rank_filter
     lines.append(f"10胜率: {rate:.1%}  [{bar}]")
     lines.append(f"10胜局: {ten_win} / {total} 局")
 
-    return "\n".join(lines)
-
-
-# ===== BPP 数据格式化 =====
-def format_hero_rankings(rankings: list[dict]) -> str:
-    """格式化英雄强度排行榜"""
-    if not rankings:
-        return "❌ 暂无数据"
-    
-    date = rankings[0].get('date', '未知')
-    lines = [f"📊 英雄强度排行 ({date})", ""]
-    
-    for i, h in enumerate(rankings, 1):
-        total = h['total_runs']
-        perfect_rate = h['perfect'] / total if total > 0 else 0
-        gold_rate = h['gold'] / total if total > 0 else 0
-        
-        rank_emoji = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"{i}."
-        lines.append(f"{rank_emoji} {h['hero_zh']}")
-        lines.append(f"  10胜率: {h['ten_win_rate']:.1%} | 综合胜率: {h['win_rate']:.1%}")
-        lines.append(f"  平均天数: {h['avg_days']:.1f} | 完美: {perfect_rate:.1%} | 金奖: {gold_rate:.1%}")
-        lines.append(f"  总对局: {h['total_runs']:,}")
-        lines.append("")
-    
-    return "\n".join(lines)
-
-
-def format_hero_detail(detail: dict) -> str:
-    """格式化英雄详细统计"""
-    if not detail:
-        return "❌ 未找到该英雄数据"
-    
-    from .bpp_client import HERO_ZH
-    name = detail['hero_zh']
-    date = detail['date']
-    total = detail['total_runs']
-    
-    lines = [f"🎯 {name} 详细统计 ({date})", ""]
-    
-    # 基础数据
-    lines.append("📈 综合数据")
-    lines.append(f"  10胜率: {detail['ten_win_rate']:.1%} ({detail['ten_win']}/{total})")
-    lines.append(f"  综合胜率: {detail['win_rate']:.1%}")
-    lines.append(f"  平均天数: {detail['avg_days']:.1f}")
-    lines.append(f"  性能评分: {detail['perf_rating']:.1f}")
-    lines.append(f"  总对局: {total:,}")
-    lines.append("")
-    
-    # 结局分布
-    outcomes = detail['outcomes']
-    lines.append("🏆 结局分布")
-    lines.append(f"  完美: {outcomes['perfect']} ({outcomes['perfect']/total:.1%})")
-    lines.append(f"  金奖: {outcomes['gold']} ({outcomes['gold']/total:.1%})")
-    lines.append(f"  银奖: {outcomes['silver']} ({outcomes['silver']/total:.1%})")
-    lines.append(f"  铜奖: {outcomes['bronze']} ({outcomes['bronze']/total:.1%})")
-    lines.append("")
-    
-    # 对阵胜率（前5）
-    matchups = detail.get('matchups', [])
-    if matchups:
-        lines.append("⚔️ 对阵胜率（前5）")
-        for m in matchups[:5]:
-            opp = m['opponent_hero']
-            opp_zh = HERO_ZH.get(opp, opp)
-            decided = m.get('decided', m.get('battles', 0))
-            wins = m.get('wins', 0)
-            losses = m.get('losses', 0)
-            wr = wins / decided if decided > 0 else 0
-            lines.append(f"  vs {opp_zh}: {wr:.1%} ({wins}-{losses})")
-        lines.append("")
-    
-    # 每日胜率走势（前7天）
-    battle_days = detail.get('battle_days', {})
-    if battle_days:
-        lines.append("📅 每日胜率走势")
-        for day_num in range(1, 8):
-            day_key = f"day_{day_num}"
-            bd = battle_days.get(day_key)
-            if not bd:
-                continue
-            decided = bd.get('decided', 0)
-            wins = bd.get('wins', 0)
-            losses = bd.get('losses', 0)
-            wr = wins / decided if decided > 0 else 0
-            lines.append(f"  Day{day_num}: {wr:.1%} ({wins}-{losses})")
-    
     return "\n".join(lines)
