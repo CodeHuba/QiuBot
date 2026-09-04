@@ -703,6 +703,47 @@ def format_combat(combat: dict, monster: dict | None = None) -> str:
     return "\n".join(lines)
 
 
+def format_winrate(result: dict, hero: str = None, days: int = None, rank_filter: str = "all") -> str:
+    """格式化 #bz winrate 查询结果"""
+    not_found = result.get('not_found', [])
+    card_names = result.get('card_names', [])
+    total = result.get('total', 0)
+    ten_win = result.get('ten_win', 0)
+    rate = result.get('rate', 0.0)
+
+    if not_found:
+        return f"❌ 找不到卡牌: {', '.join(not_found)}"
+
+    if not card_names:
+        return "❌ 未找到匹配的卡牌"
+
+    card_str = " + ".join(card_names)
+    lines = [f"📊 {card_str} 胜率统计"]
+
+    conds = []
+    if hero:
+        conds.append(f"英雄: {hero}")
+    if days:
+        conds.append(f"最近 {days} 天")
+    if rank_filter == "legendary":
+        conds.append("段位: 传奇")
+    if conds:
+        lines.append("筛选: " + " | ".join(conds))
+
+    lines.append("━━━━━━━━━━━━━━")
+
+    if total == 0:
+        lines.append("暂无数据（样本不足）")
+        return "\n".join(lines)
+
+    bar_filled = int(rate * 10)
+    bar = "█" * bar_filled + "░" * (10 - bar_filled)
+    lines.append(f"10胜率: {rate:.1%}  [{bar}]")
+    lines.append(f"10胜局: {ten_win} / {total} 局")
+
+    return "\n".join(lines)
+
+
 # ===== BPP 数据格式化 =====
 def format_hero_rankings(rankings: list[dict]) -> str:
     """格式化英雄强度排行榜"""

@@ -203,6 +203,9 @@ class BazaarPlugin(NcatBotPlugin):
         if sub == "watchlist":
             return self._cmd_watchlist(event)
 
+        if sub in {"winrate", "胜率"}:
+            return await self._cmd_winrate(arg)
+
         if sub == "testpush":
             user_id = getattr(event, "user_id", 0)
             if not ADMIN_QQ or str(user_id) != str(ADMIN_QQ):
@@ -408,6 +411,49 @@ class BazaarPlugin(NcatBotPlugin):
         items = matcher.find_matches(arg, self.client.items(), limit=20)
         skills = matcher.find_matches(arg, self.client.skills(), limit=20)
         return fmt.format_search(arg, items, skills)
+
+    async def _cmd_winrate(self, arg: str) -> str:
+        """#bz winrate <卡牌1> [卡牌2] ... [--hero 英雄] [--days N] [--legendary]"""
+        if not arg:
+            return "用法: #bz winrate <卡牌名> [卡牌2] [--hero 英雄] [--days N] [--legendary]\n示例: #bz winrate 万剑之王 --hero Pygmalien"
+
+        import re as _re
+        from .runs_query import RunsQuery
+
+        # 解析参数
+        hero = None
+        days = None
+        rank_filter = "all"
+        m_hero = _re.search(r'--hero\s+(\S+)', arg)
+        m_days = _re.search(r'--days\s+(\d+)', arg)
+        if m_hero:
+            hero = m_hero.group(1)
+            arg = arg[:m_hero.start()] + arg[m_hero.end():]
+        if m_days:
+            days = int(m_days.group(1))
+            arg = arg[:m_days.start()] + arg[m_days.end():]
+        if '--legendary' in arg:
+            rank_filter = 'legendary'
+            arg = arg.replace('--legendary', '')
+
+        cards = arg.split()
+        if not cards:
+            return "用法: #bz winrate <卡牌名> [卡牌2] [--hero 英雄] [--days N] [--legendary]"
+
+        try:
+            rq = RunsQuery()
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: rq.winrate(
+                    cards=cards,
+                    hero=hero,
+                    days=days,
+                    rank_filter=rank_filter,
+                )
+            )
+        except Exception as e:
+            return f"[巴扎] 胜率查询失败: {e}"
+
+        return fmt.format_winrate(result, hero=hero, days=days, rank_filter=rank_filter)
 
     async def _cmd_db(self, arg: str) -> str:
         """查询卡牌数据（优先本地 GameData.db，fallback bazaardb.gg）"""
