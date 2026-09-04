@@ -12,6 +12,8 @@ from pathlib import Path
 
 import httpx
 
+from .card_data_paths import get_gamedata_db_path
+
 # GameData.db 本地数据源
 try:
     from .gamedata_client import GameDataClient
@@ -90,9 +92,9 @@ class BazaarDataClient:
         if not _GAMEDATA_AVAILABLE:
             print("[BazaarDataClient] GameDataClient 不可用，跳过")
             return
-        db_path = CACHE_DIR / "GameData.db"
-        if not db_path.exists():
-            print(f"[BazaarDataClient] GameData.db 不存在，跳过")
+        db_path = get_gamedata_db_path(CACHE_DIR / "GameData.db", require_exists=True)
+        if db_path is None:
+            print("[BazaarDataClient] GameData.db 不存在，跳过")
             return
         try:
             gdc = GameDataClient(db_path)

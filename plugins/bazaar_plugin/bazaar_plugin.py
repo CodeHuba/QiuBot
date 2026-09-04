@@ -26,6 +26,7 @@ from . import formatter as fmt, subscriptions as subs, tooltip_translations as t
 from . import chart as chart_mod
 from . import history_chart as hist_chart_mod
 from . import bazaardb_client as bdb
+from . import card_data_paths
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
@@ -125,9 +126,18 @@ class BazaarPlugin(NcatBotPlugin):
             print(f"[{self.name}] bz {sub} reply({len(reply)}chars): {reply[:200]!r}")
             try:
                 await event.reply(reply)
-            except Exception as re:
+            except Exception as reply_error:
                 import traceback as _tb2
-                print(f"[{self.name}] event.reply 失败: {re}\n{_tb2.format_exc()}")
+                print(f"[{self.name}] event.reply 失败: {reply_error}\n{_tb2.format_exc()}")
+                # 图片 CQ 发送失败时，去掉图片后重试纯文字，避免整条查询无回复。
+                if "[CQ:image," in reply:
+                    text_fallback = re.sub(r"\[CQ:image,[^\]]*\]", "", reply).strip()
+                    if text_fallback:
+                        try:
+                            await event.reply(text_fallback)
+                            print(f"[{self.name}] 已降级发送纯文字回复")
+                        except Exception as fallback_error:
+                            print(f"[{self.name}] 纯文字降级回复也失败: {fallback_error}")
 
     # ===== 子命令分发 =====
     async def _dispatch(self, sub: str, arg: str, event: BaseMessageEvent) -> str:
@@ -337,7 +347,10 @@ class BazaarPlugin(NcatBotPlugin):
             if candidates:
                 en_name = candidates[0]
 
-        db_path = os.getenv("GAMEDATA_DB", "")
+        db_path = card_data_paths.get_gamedata_db_path(
+            Path(__file__).resolve().parent / "cache" / "GameData.db",
+            require_exists=True,
+        )
         raw = None
         if db_path:
             try:
@@ -349,7 +362,7 @@ class BazaarPlugin(NcatBotPlugin):
 
         if raw is not None:
             zh = trans.get_zh(en_name) or ""
-            text = gdc.format_card_from_raw(raw, zh_name=zh, db_path=db_path, show_enchants=show_enchants)
+            text = gdc.format_card_from_raw(raw, zh_name=zh, db_path=str(db_path), show_enchants=show_enchants)
             card_id = raw.get("Id", "")
             art_url = cih.get_art_url(card_id=card_id, internal_name=en_name, size="artLarge")
             if art_url:
@@ -358,14 +371,14 @@ class BazaarPlugin(NcatBotPlugin):
 
         # fallback: bazaardb.gg
         try:
-            card = await loop.run_in_executor(None, bdb.query_card_by_name, arg)
+            card = await loop.run_in_executor(None, bdb.query_card_by_name, query_arg)
         except Exception as e:
             return f"[巴扎DB] 查询失败: {e}"
 
         if card is None:
             try:
-                results_item = await loop.run_in_executor(None, bdb.search_cards, arg, "item")
-                results_skill = await loop.run_in_executor(None, bdb.search_cards, arg, "skill")
+                results_item = await loop.run_in_executor(None, bdb.search_cards, query_arg, "item")
+                results_skill = await loop.run_in_executor(None, bdb.search_cards, query_arg, "skill")
             except Exception:
                 results_item, results_skill = [], []
             candidates = results_item + results_skill

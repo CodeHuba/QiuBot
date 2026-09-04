@@ -5,6 +5,7 @@ GameData.db 客户端
 import json
 import re
 import sqlite3
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +69,14 @@ def ms_to_s(ms: float) -> str:
     """毫秒转秒，整数时去掉小数点"""
     s = ms / 1000
     return str(int(s)) if s == int(s) else str(round(s, 1))
+
+
+def normalize_card_name(value: str) -> str:
+    """规范化卡牌名称，统一 Unicode、大小写和连续空白。"""
+    if not value:
+        return ""
+    value = unicodedata.normalize("NFKC", str(value)).strip().casefold()
+    return " ".join(value.split())
 
 
 def fmt_val(v: Any, attr_key: str = "") -> str:
@@ -645,29 +654,54 @@ def format_card_from_raw(raw: dict, zh_name: str = "", db_path: str = "", show_e
     return "\n".join(out)
 
 
-def query_raw_by_name(name: str, db_path: "str | Path") -> dict | None:
-    """从 GameData.db 按名称查卡牌原始数据（支持 InternalName 或 Localization.Title.Text）。
-    优先返回 Item/Skill 类型，返回原始 JSON dict，找不到返回 None。
-    """
-    conn = sqlite3.connect(str(db_path))
-    rows = conn.execute("SELECT Data FROM cards").fetchall()
-    conn.close()
-    name_lower = name.strip().lower()
-    fallback = None
+_CARD_NAME_INDEX_CACHE: dict[str, tuple[tuple[int, int], dict[str, list[dict]]]] = {}
+
+
+def build_card_name_index(db_path: str | Path) -> dict[str, list[dict]]:
+    """读取一次 cards 表并建立规范化名称索引。"""
+    path = Path(db_path)
+    stat = path.stat()
+    signature = (stat.st_mtime_ns, stat.st_size)
+    cached = _CARD_NAME_INDEX_CACHE.get(str(path))
+    if cached and cached[0] == signature:
+        return cached[1]
+
+    conn = sqlite3.connect(str(path))
+    try:
+        rows = conn.execute("SELECT Data FROM cards").fetchall()
+    finally:
+        conn.close()
+
+    index: dict[str, list[dict]] = {}
     for (data,) in rows:
         if isinstance(data, bytes):
             data = data.decode("utf-8")
         try:
-            d = json.loads(data)
-        except Exception:
+            card = json.loads(data)
+        except (TypeError, ValueError, json.JSONDecodeError):
             continue
-        internal = d.get("InternalName", "").lower()
-        loc_title = (d.get("Localization") or {}).get("Title", {}).get("Text", "").lower()
-        if name_lower in (internal, loc_title):
-            if d.get("Type") in ("Item", "Skill"):
-                return d
-            if fallback is None:
-                fallback = d
+        aliases = (
+            card.get("InternalName", ""),
+            (card.get("Localization") or {}).get("Title", {}).get("Text", ""),
+        )
+        for alias in aliases:
+            key = normalize_card_name(alias)
+            if key and card not in index.setdefault(key, []):
+                index[key].append(card)
+    _CARD_NAME_INDEX_CACHE[str(path)] = (signature, index)
+    return index
+
+
+def query_raw_by_name(name: str, db_path: "str | Path") -> dict | None:
+    """从 GameData.db 按名称查卡牌原始数据，优先返回 Item/Skill。"""
+    index = build_card_name_index(db_path)
+    matches = index.get(normalize_card_name(name), [])
+    fallback = None
+    for card in matches:
+        if card.get("Type") in ("Item", "Skill"):
+            return card
+        if fallback is None:
+            fallback = card
     return fallback
 
 
