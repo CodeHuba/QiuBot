@@ -489,6 +489,17 @@ class BazaarPlugin(NcatBotPlugin):
             text = gdc.format_card_from_raw(raw, zh_name=zh, db_path=db_path, show_enchants=show_enchants)
             card_id = raw.get("Id", "")
             art_url = cih.get_art_url(card_id=card_id, internal_name=en_name, size="artLarge")
+            # card_images.json 可能仍是旧赛季 URL；缓存失效时直接取当前
+            # bazaardb 返回的图片地址，避免图片问题影响文字结果。
+            if not art_url:
+                try:
+                    fresh_card = await loop.run_in_executor(
+                        None, bdb.query_card_by_name, en_name
+                    )
+                    if fresh_card:
+                        art_url = fresh_card.get("ArtLarge") or fresh_card.get("Art")
+                except Exception as e:
+                    print(f"[bz db] 当前卡图获取失败: {e}")
             if art_url:
                 return f"[CQ:image,file={art_url}]\n" + text
             return text
