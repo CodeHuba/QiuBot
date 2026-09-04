@@ -22,7 +22,7 @@ from ncatbot.plugin_system import NcatBotPlugin, on_message
 from ncatbot.core.event import BaseMessageEvent
 
 from .data_client import BazaarDataClient
-from . import matcher, formatter as fmt, subscriptions as subs, tooltip_translations as tt_trans
+from . import formatter as fmt, subscriptions as subs, tooltip_translations as tt_trans
 from . import chart as chart_mod
 from . import history_chart as hist_chart_mod
 from . import bazaardb_client as bdb
@@ -134,9 +134,6 @@ class BazaarPlugin(NcatBotPlugin):
         if sub in {"help", "帮助", "?"}:
             return fmt.format_help()
 
-        if sub == "status":
-            return fmt.format_status(self.client.status())
-
         if sub == "refresh":
             user_id = getattr(event, "user_id", 0)
             if not ADMIN_QQ or str(user_id) != str(ADMIN_QQ):
@@ -166,24 +163,6 @@ class BazaarPlugin(NcatBotPlugin):
             if not username_h:
                 return "用法: #bz history <用户名> [--cb]"
             return await self._cmd_player_history(username_h, event, colorblind=colorblind)
-
-        if sub == "item":
-            return await self._cmd_item(arg)
-
-        if sub == "skill":
-            return await self._cmd_skill(arg)
-
-        if sub == "npc":
-            return self._cmd_npc(arg)
-
-        if sub == "day":
-            return self._cmd_day(arg)
-
-        if sub == "boss":
-            return self._cmd_boss(arg)
-
-        if sub == "search":
-            return self._cmd_search(arg)
 
         if sub in {"db", "数据库", "card", "卡牌"}:
             if not arg:
@@ -295,122 +274,6 @@ class BazaarPlugin(NcatBotPlugin):
 
         return None
 
-    def _ensure_loaded(self) -> str | None:
-        if not self.client.items() or not self.client.skills():
-            return "[巴扎] 数据还在加载中，稍等几秒再试"
-        return None
-
-    async def _cmd_item(self, arg: str) -> str:
-        guard = self._ensure_loaded()
-        if guard:
-            return guard
-        if not arg:
-            return "用法: #bz item <名字>  例: #bz item lugnut"
-        with_ench = False
-        if arg.endswith(" +ench") or arg.endswith(" +enchant"):
-            with_ench = True
-            arg = arg.rsplit("+", 1)[0].strip()
-        ent, candidates = matcher.find_one(arg, self.client.items())
-        if ent:
-            # 翻译 tooltips
-            translated = await self._translate_tooltips(ent)
-            return fmt.format_item(ent, with_all_enchants=with_ench, translated_tooltips=translated)
-        if candidates:
-            return fmt.format_candidates(candidates, "物品")
-        return f"找不到物品『{arg}』"
-
-    async def _cmd_skill(self, arg: str) -> str:
-        guard = self._ensure_loaded()
-        if guard:
-            return guard
-        if not arg:
-            return "用法: #bz skill <名字>  例: #bz skill above"
-        ent, candidates = matcher.find_one(arg, self.client.skills())
-        if ent:
-            # 翻译 tooltips
-            translated = await self._translate_tooltips(ent)
-            return fmt.format_skill(ent, translated_tooltips=translated)
-        if candidates:
-            return fmt.format_candidates(candidates, "技能")
-        return f"找不到技能『{arg}』"
-
-    async def _translate_tooltips(self, entity: dict) -> dict:
-        """收集所有 tier + 附魔 的 tooltips，并发翻译，返回 {英文: 中文} 字典。"""
-        name = entity.get("name") or ""
-        tiers = entity.get("tiers") or {}
-        tasks = []
-        keys = []
-
-        # tier tooltips
-        for tier in ("Bronze", "Silver", "Gold", "Diamond", "Legendary"):
-            info = tiers.get(tier) or {}
-            for t in (info.get("tooltips") or []):
-                if t:
-                    tasks.append(tt_trans.translate_tooltip(t, name, tier))
-                    keys.append(t)
-
-        # 附魔 tooltips
-        for ench in (entity.get("enchantments") or []):
-            ench_type = ench.get("type") or ""
-            for t in (ench.get("tooltips") or []):
-                if t:
-                    tasks.append(tt_trans.translate_tooltip(t, name, f"enchant_{ench_type}"))
-                    keys.append(t)
-
-        if not tasks:
-            return {}
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        out = {}
-        for k, r in zip(keys, results):
-            if isinstance(r, str):
-                out[k] = r
-        return out
-
-    def _cmd_npc(self, arg: str) -> str:
-        guard = self._ensure_loaded()
-        if guard:
-            return guard
-        if not arg:
-            return "用法: #bz npc <名字>"
-        ent, candidates = matcher.find_one(arg, self.client.merchants())
-        if ent:
-            return fmt.format_merchant(ent)
-        if candidates:
-            return fmt.format_candidates(candidates, "商人")
-        return f"找不到商人『{arg}』"
-
-    def _cmd_day(self, arg: str) -> str:
-        guard = self._ensure_loaded()
-        if guard:
-            return guard
-        if not arg:
-            return "用法: #bz day <1-10|event>"
-        day_data = self.client.get_encounter_day(arg.strip())
-        if not day_data:
-            avail = [str(d.get("day")) for d in self.client.encounter_days()]
-            return f"找不到 day『{arg}』,可选: {', '.join(avail)}"
-        return fmt.format_day(day_data)
-
-    def _cmd_boss(self, arg: str) -> str:
-        guard = self._ensure_loaded()
-        if guard:
-            return guard
-        if not arg:
-            return "用法: #bz boss <名字>"
-        card = self.client.find_encounter_by_name(arg)
-        if not card:
-            return f"找不到 encounter『{arg}』"
-        return fmt.format_boss(card)
-
-    def _cmd_search(self, arg: str) -> str:
-        guard = self._ensure_loaded()
-        if guard:
-            return guard
-        if not arg or len(arg) < 2:
-            return "用法: #bz search <关键词>  (至少 2 个字符)"
-        items = matcher.find_matches(arg, self.client.items(), limit=20)
-        skills = matcher.find_matches(arg, self.client.skills(), limit=20)
-        return fmt.format_search(arg, items, skills)
 
     async def _cmd_winrate(self, arg: str) -> str:
         """#bz winrate <卡牌1> [卡牌2] ... [--hero 英雄] [--days N] [--legendary]"""
@@ -489,17 +352,6 @@ class BazaarPlugin(NcatBotPlugin):
             text = gdc.format_card_from_raw(raw, zh_name=zh, db_path=db_path, show_enchants=show_enchants)
             card_id = raw.get("Id", "")
             art_url = cih.get_art_url(card_id=card_id, internal_name=en_name, size="artLarge")
-            # card_images.json 可能仍是旧赛季 URL；缓存失效时直接取当前
-            # bazaardb 返回的图片地址，避免图片问题影响文字结果。
-            if not art_url:
-                try:
-                    fresh_card = await loop.run_in_executor(
-                        None, bdb.query_card_by_name, en_name
-                    )
-                    if fresh_card:
-                        art_url = fresh_card.get("ArtLarge") or fresh_card.get("Art")
-                except Exception as e:
-                    print(f"[bz db] 当前卡图获取失败: {e}")
             if art_url:
                 return f"[CQ:image,file={art_url}]\n" + text
             return text
