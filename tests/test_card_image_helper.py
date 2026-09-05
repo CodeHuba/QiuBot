@@ -66,7 +66,7 @@ def test_reachability_result_is_cached(monkeypatch):
             return False
 
     def fake_urlopen(request, timeout):
-        calls.append((request.full_url, timeout))
+        calls.append((request.full_url, request.method, timeout))
         return Response()
 
     monkeypatch.setattr(helper.urllib.request, "urlopen", fake_urlopen)
@@ -75,3 +75,30 @@ def test_reachability_result_is_cached(monkeypatch):
     assert helper._url_is_reachable(url) is True
     assert helper._url_is_reachable(url) is True
     assert len(calls) == 1
+
+
+def test_get_is_used_when_head_is_not_supported(monkeypatch):
+    helper = load_helper()
+    url = "https://s.bazaardb.gg/v1/z18.0/get-only@400L.webp"
+    calls = []
+
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.method)
+        if request.method == "HEAD":
+            raise OSError("405 Method Not Allowed")
+        return Response()
+
+    monkeypatch.setattr(helper.urllib.request, "urlopen", fake_urlopen)
+    helper._URL_STATUS_CACHE.clear()
+
+    assert helper._url_is_reachable(url) is True
+    assert calls == ["HEAD", "GET"]

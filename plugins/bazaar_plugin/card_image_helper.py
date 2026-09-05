@@ -30,7 +30,17 @@ def _url_is_reachable(url: str) -> bool:
         with urllib.request.urlopen(request, timeout=3) as response:
             ok = 200 <= response.status < 400
     except Exception:
-        ok = False
+        # 部分 CDN 禁止 HEAD，但允许正常 GET；用流式 GET 做兼容性探测。
+        try:
+            request = urllib.request.Request(
+                url,
+                headers={"User-Agent": "QiuBot/1.0"},
+                method="GET",
+            )
+            with urllib.request.urlopen(request, timeout=3) as response:
+                ok = 200 <= response.status < 400
+        except Exception:
+            ok = False
 
     _URL_STATUS_CACHE[url] = (now, ok)
     return ok

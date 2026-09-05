@@ -93,6 +93,68 @@ def fmt_val(v: Any, attr_key: str = "") -> str:
     return str(v)
 
 
+def _round_native(value: float) -> float:
+    """对应原版 TValueModifier.GetRounded：正数 0~1 至少为 1，四舍五入远离 0。"""
+    if 0 < value < 1:
+        return 1.0
+    import math
+    return float(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
+
+
+def _resolve_value_object(value: dict, tier_attrs: dict) -> tuple[Any, str]:
+    """按原版 ITValue 的静态数据子集求值，返回 (值, 属性键)。"""
+    vtype = value.get("$type", "")
+    if vtype == "TFixedValue":
+        return value.get("Value"), ""
+    ref_attr = value.get("AttributeType", "")
+    if "ReferenceValue" in vtype or vtype.endswith("Attribute"):
+        raw = tier_attrs.get(ref_attr, value.get("DefaultValue", 0.0))
+        attr_key = ref_attr
+        modifier = value.get("Modifier")
+        if isinstance(modifier, dict):
+            modified, _ = _apply_modifier(raw, modifier, tier_attrs)
+            return modified, attr_key
+        return raw, attr_key
+    return None, ""
+
+
+def _apply_modifier(original: Any, modifier: dict, tier_attrs: dict) -> tuple[Any, str]:
+    modifier_value = modifier.get("Value")
+    if not isinstance(modifier_value, dict):
+        return original, ""
+    amount, amount_key = _resolve_value_object(modifier_value, tier_attrs)
+    if amount is None:
+        return original, amount_key
+    try:
+        mode = modifier.get("ModifyMode", "")
+        if mode == "Add":
+            result = original + amount
+        elif mode == "Subtract":
+            result = original - amount
+        elif mode == "Multiply":
+            result = original * amount
+        elif mode == "Divide":
+            result = original / amount if amount != 0 else original
+        else:
+            result = original
+        if modifier.get("ShouldRound") and mode in ("Multiply", "Divide"):
+            result = _round_native(float(result))
+        return result, amount_key
+    except (TypeError, ValueError, ZeroDivisionError):
+        return original, amount_key
+
+
+def _resolve_raw_value_object(value: dict, tier_attrs: dict) -> tuple[Any, str]:
+    """对应原版 ITValue.GetRawValue：只解析引用本体，不应用其 Modifier。"""
+    vtype = value.get("$type", "")
+    if vtype == "TFixedValue":
+        return value.get("Value"), ""
+    if "ReferenceValue" in vtype or vtype.endswith("Attribute"):
+        ref_attr = value.get("AttributeType", "")
+        return tier_attrs.get(ref_attr, value.get("DefaultValue", 0.0)), ref_attr
+    return None, ""
+
+
 def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
     """
     从 action 中提取数值，返回 (值, attr_key)
@@ -114,14 +176,18 @@ def extract_value(action: dict, tier_attrs: dict) -> tuple[Any, str]:
         vtype = val.get("$type", "")
         if vtype == "TFixedValue":
             return val.get("Value"), attr_type
-        # TReferenceValueCardAttribute / TReferenceValueCardAttributeUnscaled / TReferenceValueCardAttributeAggregate
         if "ReferenceValue" in vtype or vtype.endswith("Attribute"):
-            ref_attr = val.get("AttributeType", "")
-            if ref_attr and ref_attr in tier_attrs:
-                return tier_attrs[ref_attr], ref_attr
+            return _resolve_value_object(val, tier_attrs)
         # fallback：直接读目标属性值
         if attr_type and attr_type in tier_attrs:
             return tier_attrs[attr_type], attr_type
+        return None, ""
+
+    # 游戏原版对 Reroll 读取 SpawnCount，而不是 AttributeType。
+    if atype == "TActionGameReroll":
+        spawn_count = action.get("SpawnCount")
+        if isinstance(spawn_count, dict) and spawn_count.get("$type") == "TFixedValue":
+            return spawn_count.get("Value"), ""
         return None, ""
 
     # TActionGameSpawnCards / TActionGameDealCards：取 SpawnContext.Limit
@@ -226,10 +292,14 @@ def render_tooltip(
                 targets_attr = ACTION_TARGETS_MAP.get(atype)
                 if targets_attr and targets_attr in tier_attrs:
                     return fmt_val(tier_attrs[targets_attr])
-                tc = action.get("TargetCount")
-                if isinstance(tc, dict) and tc.get("$type") == "TFixedValue":
-                    return fmt_val(tc.get("Value"))
-                return "1"
+                return "0"
+            if sub == "ref":
+                val = action.get("Value", {})
+                if isinstance(val, dict):
+                    value, attr_key = _resolve_raw_value_object(val, tier_attrs)
+                    if value is not None:
+                        return fmt_val(value, attr_key)
+                return None
             if sub == "mod":
                 # ability.X.mod → action.Value.Modifier.Value（逆向 GetModifierValue）
                 val = action.get("Value", {})
@@ -241,13 +311,14 @@ def render_tooltip(
                             return fmt_val(mv.get("Value"))
                         # modifier.Value 是 TReferenceValueCardAttribute
                         if isinstance(mv, dict) and "ReferenceValue" in mv.get("$type", ""):
-                            ref = mv.get("AttributeType", "")
-                            if ref and ref in tier_attrs:
-                                return fmt_val(tier_attrs[ref])
+                            value, _ = _resolve_value_object(mv, tier_attrs)
+                            if value is not None:
+                                return fmt_val(value)
                 return None
             v, ak = extract_value(action, tier_attrs)
             if v is None:
-                return None
+                # 原版 GetValue() 对未知/缺失属性通过 TryGetAttributeValue(...).GetValueOrDefault() 返回 0。
+                return "0"
             return fmt_val(v, ak)
 
         elif prefix == "aura":
@@ -255,6 +326,10 @@ def render_tooltip(
             if aura is None:
                 return None
             action = aura.get("Action", {})
+            if sub == "targets":
+                # 原版 TooltipComponentAura.Resolve() 对 Targets 明确返回 null，
+                # 由组件渲染为空字符串，而不是保留占位符。
+                return ""
             if sub == "mod":
                 # aura.X.mod → action.Value.Modifier.Value（逆向 GetModifierValue）
                 val = action.get("Value", {})
@@ -266,9 +341,9 @@ def render_tooltip(
                             return fmt_val(mv.get("Value"))
                         # modifier.Value 是 TReferenceValueCardAttribute
                         if isinstance(mv, dict) and "ReferenceValue" in mv.get("$type", ""):
-                            ref = mv.get("AttributeType", "")
-                            if ref and ref in tier_attrs:
-                                return fmt_val(tier_attrs[ref])
+                            value, _ = _resolve_value_object(mv, tier_attrs)
+                            if value is not None:
+                                return fmt_val(value)
                 return None
             v, ak = extract_value(action, tier_attrs)
             if v is None:
@@ -277,15 +352,28 @@ def render_tooltip(
 
         return None
 
+    def _coalesce_value(value: str | None) -> str | None:
+        """原版 IsZero：数值绝对值小于 0.0001 时视为未解析。"""
+        if value is None:
+            return None
+        try:
+            if abs(float(value)) < 0.0001:
+                return None
+        except (TypeError, ValueError):
+            pass
+        return value
+
     def replace_ph(m: re.Match) -> str:
         ph = m.group(1)
         if "??" in ph:
             left, right = ph.split("??", 1)
-            r = resolve_single(left.strip())
-            if r is not None:
-                return r
-            r = resolve_single(right.strip())
-            return r if r is not None else m.group(0)
+            left_value = _coalesce_value(resolve_single(left.strip()))
+            if left_value is not None:
+                return left_value
+            right_value = _coalesce_value(resolve_single(right.strip()))
+            if right_value is not None:
+                return right_value
+            return ""
         r = resolve_single(ph)
         return r if r is not None else m.group(0)
 

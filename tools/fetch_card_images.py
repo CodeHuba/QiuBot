@@ -9,35 +9,96 @@
 - 每 100 张休息 30~60s
 - 遇到 429/403 自动暂停 5 分钟
 """
-import sys, json, time, sqlite3, random
+import sys, json, os, time, sqlite3, random
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, '/opt/qiubot')
 from plugins.bazaar_plugin import bazaardb_client as bdb
 from plugins.bazaar_plugin import translations as trans
+from plugins.bazaar_plugin.card_data_paths import get_gamedata_db_path
 
-GAMEDATA_DB = '/opt/qiubot/plugins/bazaar_plugin/cache/GameData.db'
+GAMEDATA_DB = get_gamedata_db_path(
+    Path('/opt/qiubot/plugins/bazaar_plugin/cache/GameData.db')
+)
 OUTPUT_FILE = Path('/opt/qiubot/plugins/bazaar_plugin/cache/card_images.json')
 
 # 只拉取这两种类型
 VALID_TYPES = {'Item', 'Skill'}
 
-# 反爬参数
+
+def cache_needs_refresh(cached: dict, current_version: str) -> bool:
+    """判断图片缓存是否为空或指向旧赛季资源。"""
+    if not isinstance(cached, dict):
+        return True
+    expected = f"/v1/z{current_version}/"
+    urls = [cached.get(key) for key in ("artLarge", "art")]
+    # 两种尺寸只要存在，就都必须指向当前资源版本；缺失任一尺寸也需要刷新。
+    return not urls or any(not isinstance(url, str) or expected not in url for url in urls)
+
+
+# 当前 CDN 图片资源版本，可通过环境变量覆盖
+IMAGE_VERSION = os.getenv("CARD_IMAGE_VERSION", "18.0")
+
+def preserve_cached_record_on_failure(cached: dict | None, error: str = "") -> dict | None:
+    """刷新失败时保留旧记录，调用方可另行记录 error。"""
+    return cached
+
+
+def image_urls_are_current(card_info: dict, current_version: str) -> bool:
+    """确认接口返回的两种图片 URL 都存在且属于当前资源版本。"""
+    if not isinstance(card_info, dict):
+        return False
+    expected = f"/v1/z{current_version}/"
+    return all(
+        isinstance(card_info.get(key), str) and expected in card_info[key]
+        for key in ("Art", "ArtLarge")
+    )
+
+
 BATCH_SIZE = 100  # 每批休息一次
 BATCH_REST = (30, 60)  # 每批后休息 30~60s
 REQUEST_INTERVAL = (1.5, 2.5)  # 请求间隔
 RETRY_WAIT = 300  # 遇到限流休息 5 分钟
 
+
+def save_cache_atomic(output_file: Path, payload: dict) -> None:
+    """以临时文件原子替换卡图缓存，避免中断留下半个 JSON。"""
+    output_file = Path(output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{output_file.name}.", suffix=".tmp", dir=output_file.parent
+    )
+    temp_file = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        temp_file.replace(output_file)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
 def main():
-    conn = sqlite3.connect(GAMEDATA_DB)
+    if GAMEDATA_DB is None or not GAMEDATA_DB.is_file():
+        raise FileNotFoundError(
+            "GameData.db 不存在，请设置 GAMEDATA_DB 或准备插件 cache/GameData.db"
+        )
+    conn = sqlite3.connect(str(GAMEDATA_DB))
     rows = conn.execute('SELECT Id, Data FROM cards').fetchall()
     conn.close()
     
     # 筛选出 Item 和 Skill
     targets = []
     for card_id, data_json in rows:
-        data = json.loads(data_json)
+        try:
+            data = json.loads(data_json)
+        except (TypeError, ValueError, json.JSONDecodeError) as e:
+            print(f'跳过损坏的卡牌数据 {card_id}: {e}')
+            continue
         if data.get('Type') in VALID_TYPES:
             targets.append((data['Id'], data))
     
@@ -48,7 +109,7 @@ def main():
     # 加载已有数据
     result = {
         'meta': {
-            'version': '17.3',
+            'version': IMAGE_VERSION,
             'total': len(targets),
             'fetched': 0,
             'skipped': 0,
@@ -61,9 +122,10 @@ def main():
     if OUTPUT_FILE.exists():
         try:
             existing = json.loads(OUTPUT_FILE.read_text())
-            result['cards'] = existing.get('cards', {})
-            result['meta']['skipped'] = len(result['cards'])
-            print(f'已有缓存: {result["meta"]["skipped"]} 张\n')
+            cached_cards = existing.get('cards', {})
+            result['cards'] = cached_cards if isinstance(cached_cards, dict) else {}
+            result['meta']['skipped'] = 0
+            print(f'已有缓存: {len(result["cards"])} 张，开始按版本检查\n')
         except Exception as e:
             print(f'加载缓存失败: {e}\n')
     
@@ -74,14 +136,15 @@ def main():
         card_type = data.get('Type', '')
         art_key = data.get('ArtKey', '')
         
-        # 跳过已有
-        if card_id in result['cards']:
+        # 当前版本缓存可以复用；旧版本或缺失图片需要重新拉取。
+        cached_card = result['cards'].get(card_id)
+        if cached_card is not None and not cache_needs_refresh(cached_card, IMAGE_VERSION):
+            result['meta']['skipped'] += 1
             if idx % 100 == 0:
-                print(f'[{idx}/{len(targets)}] 跳过已缓存... (总计 {len(result["cards"])} 张)')
+                print(f'[{idx}/{len(targets)}] 跳过当前版本缓存... (总计 {len(result["cards"])} 张)')
             continue
-        
+
         print(f'[{idx}/{len(targets)}] {internal_name[:35]:35s} ... ', end='', flush=True)
-        
         try:
             card_info = bdb.query_card_by_name(internal_name)
             
@@ -99,7 +162,7 @@ def main():
             else:
                 retry_count = 0
             
-            if card_info and card_info.get('Art'):
+            if card_info and image_urls_are_current(card_info, IMAGE_VERSION):
                 zh_name = (card_info.get('Title') or {}).get('Text', '')
                 if not zh_name or not trans.has_chinese(zh_name):
                     zh_name = trans.get_zh(internal_name) or internal_name
@@ -120,10 +183,12 @@ def main():
             else:
                 result['meta']['failed'] += 1
                 print('✗ (无数据)')
+                result['cards'][card_id] = preserve_cached_record_on_failure(cached_card)
         except Exception as e:
             result['meta']['failed'] += 1
             error_msg = str(e)[:50]
             print(f'✗ ({error_msg})')
+            result['cards'][card_id] = preserve_cached_record_on_failure(cached_card, error_msg)
             
             # 检测 429/403
             if '429' in error_msg or '403' in error_msg or 'Forbidden' in error_msg:
@@ -133,7 +198,7 @@ def main():
         # 每 20 张保存一次
         if idx % 20 == 0:
             result['meta']['last_update'] = datetime.utcnow().isoformat() + 'Z'
-            OUTPUT_FILE.write_text(json.dumps(result, ensure_ascii=False, indent=2))
+            save_cache_atomic(OUTPUT_FILE, result)
             total_done = result['meta']['skipped'] + result['meta']['fetched']
             print(f'  → 已完成 {total_done}/{len(targets)} 张 (成功 {result["meta"]["fetched"]}, 失败 {result["meta"]["failed"]})')
         
@@ -148,7 +213,7 @@ def main():
     
     # 最终保存
     result['meta']['last_update'] = datetime.utcnow().isoformat() + 'Z'
-    OUTPUT_FILE.write_text(json.dumps(result, ensure_ascii=False, indent=2))
+    save_cache_atomic(OUTPUT_FILE, result)
     
     print(f'\n✅ 完成！')
     print(f'  已有缓存: {result["meta"]["skipped"]}')
